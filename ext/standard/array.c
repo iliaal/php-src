@@ -922,6 +922,10 @@ static inline HashTable *get_ht_for_iap(zval *zv, bool separate) {
 	php_error_docref(NULL, E_DEPRECATED,
 		"Calling %s() on an object is deprecated", get_active_function_name());
 
+	if (UNEXPECTED(Z_TYPE_P(zv) != IS_OBJECT)) {
+		return NULL;
+	}
+
 	zend_object *zobj = Z_OBJ_P(zv);
 	if (separate && zobj->properties && UNEXPECTED(GC_REFCOUNT(zobj->properties) > 1)) {
 		if (EXPECTED(!(GC_FLAGS(zobj->properties) & IS_ARRAY_IMMUTABLE))) {
@@ -982,7 +986,7 @@ PHP_FUNCTION(end)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ true);
-	if (zend_hash_num_elements(array) == 0) {
+	if (!array || zend_hash_num_elements(array) == 0) {
 		/* array->nInternalPointer is already 0 if the array is empty, even after removing elements */
 		RETURN_FALSE;
 	}
@@ -1004,7 +1008,7 @@ PHP_FUNCTION(prev)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ true);
-	if (zend_hash_num_elements(array) == 0) {
+	if (!array || zend_hash_num_elements(array) == 0) {
 		/* array->nInternalPointer is already 0 if the array is empty, even after removing elements */
 		RETURN_FALSE;
 	}
@@ -1026,7 +1030,7 @@ PHP_FUNCTION(next)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ true);
-	if (zend_hash_num_elements(array) == 0) {
+	if (!array || zend_hash_num_elements(array) == 0) {
 		/* array->nInternalPointer is already 0 if the array is empty, even after removing elements */
 		RETURN_FALSE;
 	}
@@ -1048,7 +1052,7 @@ PHP_FUNCTION(reset)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ true);
-	if (zend_hash_num_elements(array) == 0) {
+	if (!array || zend_hash_num_elements(array) == 0) {
 		/* array->nInternalPointer is already 0 if the array is empty, even after removing elements */
 		RETURN_FALSE;
 	}
@@ -1070,6 +1074,9 @@ PHP_FUNCTION(current)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ false);
+	if (!array) {
+		RETURN_FALSE;
+	}
 	php_array_iter_return_current(return_value, array, true);
 }
 /* }}} */
@@ -1084,6 +1091,9 @@ PHP_FUNCTION(key)
 	ZEND_PARSE_PARAMETERS_END();
 
 	HashTable *array = get_ht_for_iap(array_zv, /* separate */ false);
+	if (!array) {
+		RETURN_NULL();
+	}
 	zval *entry = php_array_iter_seek_current(array, true);
 	if (EXPECTED(entry)) {
 		zend_hash_get_current_key_zval(array, return_value);
