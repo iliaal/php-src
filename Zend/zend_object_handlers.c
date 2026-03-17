@@ -1401,12 +1401,24 @@ try_again:
 			    UNEXPECTED((*zend_get_property_guard(zobj, name)) & IN_GET) ||
 			    UNEXPECTED(prop_info && (Z_PROP_FLAG_P(retval) & IS_PROP_UNINIT))) {
 				if (UNEXPECTED(zend_lazy_object_must_init(zobj) && (Z_PROP_FLAG_P(retval) & IS_PROP_LAZY))) {
-					zobj = zend_lazy_object_init(zobj);
-					if (!zobj) {
+					bool guarded = zobj->ce->__get
+						&& (*zend_get_property_guard(zobj, name) & IN_GET);
+					zend_object *instance = zend_lazy_object_init(zobj);
+					if (!instance) {
 						return &EG(error_zval);
 					}
 
-					return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot);
+					if (guarded && (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
+						uint32_t *guard = zend_get_property_guard(instance, name);
+						if (!(*guard & IN_GET)) {
+							(*guard) |= IN_GET;
+							retval = zend_std_get_property_ptr_ptr(instance, name, type, cache_slot);
+							(*guard) &= ~IN_GET;
+							return retval;
+						}
+					}
+
+					return zend_std_get_property_ptr_ptr(instance, name, type, cache_slot);
 				}
 				if (UNEXPECTED(type == BP_VAR_RW || type == BP_VAR_R)) {
 					if (prop_info) {
@@ -1459,12 +1471,23 @@ try_again:
 				}
 			}
 			if (UNEXPECTED(zend_lazy_object_must_init(zobj))) {
-				zobj = zend_lazy_object_init(zobj);
-				if (!zobj) {
+				bool guarded = (zobj->ce->__get != NULL);
+				zend_object *instance = zend_lazy_object_init(zobj);
+				if (!instance) {
 					return &EG(error_zval);
 				}
 
-				return zend_std_get_property_ptr_ptr(zobj, name, type, cache_slot);
+				if (guarded && (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS)) {
+					uint32_t *guard = zend_get_property_guard(instance, name);
+					if (!(*guard & IN_GET)) {
+						(*guard) |= IN_GET;
+						retval = zend_std_get_property_ptr_ptr(instance, name, type, cache_slot);
+						(*guard) &= ~IN_GET;
+						return retval;
+					}
+				}
+
+				return zend_std_get_property_ptr_ptr(instance, name, type, cache_slot);
 			}
 			if (UNEXPECTED(!zobj->properties)) {
 				rebuild_object_properties_internal(zobj);
