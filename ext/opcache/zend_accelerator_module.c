@@ -961,6 +961,23 @@ ZEND_FUNCTION(opcache_jit_blacklist)
 #endif
 }
 
+/* Remove hash table entries appended after orig_count without calling the
+ * destructor, since these point to SHM-backed data we don't own. */
+static void accel_rollback_hash(HashTable *ht, uint32_t orig_count)
+{
+	dtor_func_t orig_dtor = ht->pDestructor;
+	ht->pDestructor = NULL;
+	while (ht->nNumUsed > orig_count) {
+		Bucket *p = &ht->arData[ht->nNumUsed - 1];
+		if (EXPECTED(Z_TYPE(p->val) != IS_UNDEF)) {
+			zend_hash_del_bucket(ht, p);
+		} else {
+			ht->nNumUsed--;
+		}
+	}
+	ht->pDestructor = orig_dtor;
+}
+
 ZEND_FUNCTION(opcache_compile_file)
 {
 	zend_string *script_name;
@@ -984,6 +1001,11 @@ ZEND_FUNCTION(opcache_compile_file)
 	orig_compiler_options = CG(compiler_options);
 	CG(compiler_options) |= ZEND_COMPILE_WITHOUT_EXECUTION;
 
+	/* Save class/function table state so we can undo the side effects
+	 * of zend_accel_load_script() called by persistent_compile_file(). */
+	uint32_t orig_class_count = EG(class_table)->nNumUsed;
+	uint32_t orig_function_count = EG(function_table)->nNumUsed;
+
 	if (CG(compiler_options) & ZEND_COMPILE_PRELOAD) {
 		/* During preloading, a failure in opcache_compile_file() should result in an overall
 		 * preloading failure. Otherwise we may include partially compiled files in the preload
@@ -1001,6 +1023,14 @@ ZEND_FUNCTION(opcache_compile_file)
 	CG(compiler_options) = orig_compiler_options;
 
 	if(op_array != NULL) {
+		/* Undo classes/functions registered by zend_accel_load_script().
+		 * opcache_compile_file() should only cache without side effects.
+		 * Skip during preloading: preload needs the registrations to persist. */
+		if (!(orig_compiler_options & ZEND_COMPILE_PRELOAD)) {
+			accel_rollback_hash(EG(class_table), orig_class_count);
+			accel_rollback_hash(EG(function_table), orig_function_count);
+		}
+
 		destroy_op_array(op_array);
 		efree(op_array);
 		RETVAL_TRUE;

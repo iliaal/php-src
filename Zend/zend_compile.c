@@ -9654,35 +9654,44 @@ static void zend_compile_class_decl(znode *result, const zend_ast *ast, bool top
 	 /* See zend_link_hooked_object_iter(). */
 	 && !ce->num_hooked_props
 #endif
-	 && !(CG(compiler_options) & ZEND_COMPILE_WITHOUT_EXECUTION)) {
-		if (toplevel) {
-			if (extends_ast) {
-				zend_class_entry *parent_ce = zend_lookup_class_ex(
-					ce->parent_name, NULL, ZEND_FETCH_CLASS_NO_AUTOLOAD);
+	) {
+		if (!(CG(compiler_options) & ZEND_COMPILE_WITHOUT_EXECUTION)) {
+			if (toplevel) {
+				if (extends_ast) {
+					zend_class_entry *parent_ce = zend_lookup_class_ex(
+						ce->parent_name, NULL, ZEND_FETCH_CLASS_NO_AUTOLOAD);
 
-				if (parent_ce
-				 && !zend_compile_ignore_class(parent_ce, ce->info.user.filename)) {
-					if (zend_try_early_bind(ce, parent_ce, lcname, NULL)) {
-						zend_string_release(lcname);
-						return;
+					if (parent_ce
+					 && !zend_compile_ignore_class(parent_ce, ce->info.user.filename)) {
+						if (zend_try_early_bind(ce, parent_ce, lcname, NULL)) {
+							zend_string_release(lcname);
+							return;
+						}
 					}
+				} else if (EXPECTED(zend_hash_add_ptr(CG(class_table), lcname, ce) != NULL)) {
+					zend_string_release(lcname);
+					zend_build_properties_info_table(ce);
+					zend_inheritance_check_override(ce);
+					ce->ce_flags |= ZEND_ACC_LINKED;
+					zend_observer_class_linked_notify(ce, lcname);
+					return;
+				} else {
+					goto link_unbound;
 				}
-			} else if (EXPECTED(zend_hash_add_ptr(CG(class_table), lcname, ce) != NULL)) {
-				zend_string_release(lcname);
+			} else if (!extends_ast) {
+link_unbound:
+				/* Link unbound simple class */
 				zend_build_properties_info_table(ce);
 				zend_inheritance_check_override(ce);
 				ce->ce_flags |= ZEND_ACC_LINKED;
-				zend_observer_class_linked_notify(ce, lcname);
-				return;
-			} else {
-				goto link_unbound;
 			}
-		} else if (!extends_ast) {
-link_unbound:
-			/* Link unbound simple class */
-			zend_build_properties_info_table(ce);
-			zend_inheritance_check_override(ce);
-			ce->ce_flags |= ZEND_ACC_LINKED;
+		} else if (!extends_ast
+				&& !(CG(compiler_options) & ZEND_COMPILE_PRELOAD)) {
+			/* When compiling without execution (opcache_compile_file),
+			 * link simple classes without parents so opcache can
+			 * early-bind them when loaded from cache. Skip during
+			 * preloading which has its own linking pipeline. */
+			goto link_unbound;
 		}
 	}
 
