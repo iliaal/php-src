@@ -19,6 +19,4 @@ echo "Done\n";
 ?>
 --EXPECTF--
 Deprecated: Creation of dynamic property C::$x is deprecated in %s on line %d
-
-Deprecated: Creation of dynamic property C::$x is deprecated in %s on line %d
 Done

@@ -21,10 +21,6 @@ var_dump($real->prop);
 --EXPECTF--
 Deprecated: Creation of dynamic property A::$b is deprecated in %s on line %d
 
-Deprecated: Creation of dynamic property A::$b is deprecated in %s on line %d
-
-Deprecated: Creation of dynamic property A::$f is deprecated in %s on line %d
-
 Deprecated: Creation of dynamic property A::$f is deprecated in %s on line %d
 
 Warning: Undefined variable $x in %s on line %d
@@ -32,16 +28,6 @@ Warning: Undefined variable $x in %s on line %d
 Notice: Object of class stdClass could not be converted to int in %s on line %d
 
 Warning: Undefined variable $a in %s on line %d
-
-Warning: Undefined variable $v in %s on line %d
-
-Notice: Indirect modification of overloaded property A::$b has no effect in %s on line %d
-
-Deprecated: Creation of dynamic property A::$f is deprecated in %s on line %d
-
-Warning: Undefined variable $x in %s on line %d
-
-Notice: Object of class stdClass could not be converted to int in %s on line %d
 
 Warning: Undefined variable $v in %s on line %d
 

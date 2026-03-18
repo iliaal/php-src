@@ -19,8 +19,6 @@ var_dump($obj->p);
 --EXPECTF--
 Deprecated: Creation of dynamic property A::$x is deprecated in %s on line %d
 
-Deprecated: Creation of dynamic property A::$x is deprecated in %s on line %d
-
 Warning: Undefined variable $a in %s on line %d
 
 Notice: Indirect modification of overloaded property A::$x has no effect in %s on line %d
