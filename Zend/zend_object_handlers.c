@@ -893,6 +893,13 @@ try_again:
 
 	retval = &EG(uninitialized_zval);
 
+	if (UNEXPECTED(zend_object_is_lazy_proxy(zobj)
+			&& zend_lazy_object_initialized(zobj)
+			&& (type == BP_VAR_R || type == BP_VAR_IS))) {
+		zend_object *instance = zend_lazy_object_get_instance(zobj);
+		return zend_std_read_property(instance, name, type, cache_slot, rv);
+	}
+
 	/* magic isset */
 	if ((type == BP_VAR_IS) && zobj->ce->__isset) {
 		zval tmp_result;
