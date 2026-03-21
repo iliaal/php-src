@@ -886,6 +886,23 @@ try_again:
 
 	retval = &EG(uninitialized_zval);
 
+	/* For initialized lazy proxies: if the real instance's magic method
+	 * guard is already set for this property, we are inside a recursive
+	 * call from the real instance's __get/__isset. Forward directly to
+	 * the real instance to avoid double invocation. (GH-21478) */
+	if (UNEXPECTED(zend_object_is_lazy_proxy(zobj)
+			&& zend_lazy_object_initialized(zobj))) {
+		zend_object *instance = zend_lazy_object_get_instance(zobj);
+		if (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			uint32_t *instance_guard = zend_get_property_guard(instance, name);
+			uint32_t guard_type = ((type == BP_VAR_IS) && zobj->ce->__isset)
+				? IN_ISSET : IN_GET;
+			if ((*instance_guard) & guard_type) {
+				return zend_std_read_property(instance, name, type, cache_slot, rv);
+			}
+		}
+	}
+
 	/* magic isset */
 	if ((type == BP_VAR_IS) && zobj->ce->__isset) {
 		zval tmp_result;
@@ -1201,6 +1218,20 @@ found:;
 	} else if (UNEXPECTED(EG(exception))) {
 		variable_ptr = &EG(error_zval);
 		goto exit;
+	}
+
+	/* For initialized lazy proxies: if the real instance's __set guard
+	 * is already set, we are inside a recursive call from the real
+	 * instance's __set. Forward directly to avoid double invocation. */
+	if (UNEXPECTED(zend_object_is_lazy_proxy(zobj)
+			&& zend_lazy_object_initialized(zobj))) {
+		zend_object *instance = zend_lazy_object_get_instance(zobj);
+		if (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			uint32_t *instance_guard = zend_get_property_guard(instance, name);
+			if ((*instance_guard) & IN_SET) {
+				return zend_std_write_property(instance, name, value, cache_slot);
+			}
+		}
 	}
 
 	/* magic set */
@@ -1570,6 +1601,21 @@ ZEND_API void zend_std_unset_property(zend_object *zobj, zend_string *name, void
 		return;
 	} else if (UNEXPECTED(EG(exception))) {
 		return;
+	}
+
+	/* For initialized lazy proxies: if the real instance's __unset guard
+	 * is already set, we are inside a recursive call from the real
+	 * instance's __unset. Forward directly to avoid double invocation. */
+	if (UNEXPECTED(zend_object_is_lazy_proxy(zobj)
+			&& zend_lazy_object_initialized(zobj))) {
+		zend_object *instance = zend_lazy_object_get_instance(zobj);
+		if (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			uint32_t *instance_guard = zend_get_property_guard(instance, name);
+			if ((*instance_guard) & IN_UNSET) {
+				zend_std_unset_property(instance, name, cache_slot);
+				return;
+			}
+		}
 	}
 
 	/* magic unset */
@@ -2387,6 +2433,20 @@ found:
 	} else if (UNEXPECTED(EG(exception))) {
 		result = false;
 		goto exit;
+	}
+
+	/* For initialized lazy proxies: if the real instance's __isset guard
+	 * is already set, we are inside a recursive call from the real
+	 * instance's __isset. Forward directly to avoid double invocation. */
+	if (UNEXPECTED(zend_object_is_lazy_proxy(zobj)
+			&& zend_lazy_object_initialized(zobj))) {
+		zend_object *instance = zend_lazy_object_get_instance(zobj);
+		if (instance->ce->ce_flags & ZEND_ACC_USE_GUARDS) {
+			uint32_t *instance_guard = zend_get_property_guard(instance, name);
+			if ((*instance_guard) & IN_ISSET) {
+				return zend_std_has_property(instance, name, has_set_exists, cache_slot);
+			}
+		}
 	}
 
 	if (!zobj->ce->__isset) {
