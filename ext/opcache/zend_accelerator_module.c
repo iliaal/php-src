@@ -961,23 +961,6 @@ ZEND_FUNCTION(opcache_jit_blacklist)
 #endif
 }
 
-/* Remove hash table entries appended after orig_count without calling the
- * destructor, since these point to SHM-backed data we don't own. */
-static void accel_rollback_hash(HashTable *ht, uint32_t orig_count)
-{
-	dtor_func_t orig_dtor = ht->pDestructor;
-	ht->pDestructor = NULL;
-	while (ht->nNumUsed > orig_count) {
-		Bucket *p = &ht->arData[ht->nNumUsed - 1];
-		if (EXPECTED(Z_TYPE(p->val) != IS_UNDEF)) {
-			zend_hash_del_bucket(ht, p);
-		} else {
-			ht->nNumUsed--;
-		}
-	}
-	ht->pDestructor = orig_dtor;
-}
-
 ZEND_FUNCTION(opcache_compile_file)
 {
 	zend_string *script_name;
@@ -1027,8 +1010,8 @@ ZEND_FUNCTION(opcache_compile_file)
 		 * opcache_compile_file() should only cache without side effects.
 		 * Skip during preloading: preload needs the registrations to persist. */
 		if (!(orig_compiler_options & ZEND_COMPILE_PRELOAD)) {
-			accel_rollback_hash(EG(class_table), orig_class_count);
-			accel_rollback_hash(EG(function_table), orig_function_count);
+			zend_hash_discard(EG(class_table), orig_class_count);
+			zend_hash_discard(EG(function_table), orig_function_count);
 		}
 
 		destroy_op_array(op_array);
