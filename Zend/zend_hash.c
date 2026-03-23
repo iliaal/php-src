@@ -1820,6 +1820,11 @@ ZEND_API void ZEND_FASTCALL zend_hash_destroy(HashTable *ht)
 
 ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 {
+	zend_array *child;
+
+tail_call:
+	child = NULL;
+
 	IS_CONSISTENT(ht);
 	HT_ASSERT(ht, GC_REFCOUNT(ht) <= 1);
 
@@ -1839,10 +1844,27 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 		if (HT_IS_PACKED(ht)) {
 			zval *zv = ht->arPacked;
 			zval *end = zv + ht->nNumUsed;
+			zval *last = end - 1;
 
-			do {
+			while (zv != last) {
 				i_zval_ptr_dtor(zv);
-			} while (++zv != end);
+				zv++;
+			}
+			/* Tail-call optimization for the last element: if it is an
+			 * array whose refcount reaches zero, defer its destruction
+			 * to avoid deep recursion through rc_dtor_func. */
+			if (Z_REFCOUNTED_P(last)) {
+				zend_refcounted *ref = Z_COUNTED_P(last);
+				if (!GC_DELREF(ref)) {
+					if (GC_TYPE(ref) == IS_ARRAY) {
+						child = (zend_array *)ref;
+					} else {
+						rc_dtor_func(ref);
+					}
+				} else {
+					gc_check_possible_root(ref);
+				}
+			}
 		} else {
 			Bucket *p = ht->arData;
 			Bucket *end = p + ht->nNumUsed;
@@ -1877,6 +1899,11 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 free_ht:
 	zend_hash_iterators_remove(ht);
 	FREE_HASHTABLE(ht);
+
+	if (UNEXPECTED(child)) {
+		ht = (HashTable *)child;
+		goto tail_call;
+	}
 }
 
 ZEND_API void ZEND_FASTCALL zend_hash_clean(HashTable *ht)
