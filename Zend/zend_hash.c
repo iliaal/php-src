@@ -1820,6 +1820,11 @@ ZEND_API void ZEND_FASTCALL zend_hash_destroy(HashTable *ht)
 
 ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 {
+	zend_array *child;
+
+tail_call:
+	child = NULL;
+
 	IS_CONSISTENT(ht);
 	HT_ASSERT(ht, GC_REFCOUNT(ht) <= 1);
 
@@ -1836,12 +1841,30 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 
 		SET_INCONSISTENT(HT_IS_DESTROYING);
 
+		/* Deferred dtor: when an element is an array with refcount reaching
+		 * zero, save it for tail-call destruction instead of recursing.
+		 * Prevents stack overflow with deeply nested arrays. */
+#define ZVAL_DTOR_DEFERRED(zv) do { \
+	if (Z_REFCOUNTED_P(zv)) { \
+		zend_refcounted *ref = Z_COUNTED_P(zv); \
+		if (!GC_DELREF(ref)) { \
+			if (!child && GC_TYPE(ref) == IS_ARRAY) { \
+				child = (zend_array *)ref; \
+			} else { \
+				rc_dtor_func(ref); \
+			} \
+		} else { \
+			gc_check_possible_root(ref); \
+		} \
+	} \
+} while (0)
+
 		if (HT_IS_PACKED(ht)) {
 			zval *zv = ht->arPacked;
 			zval *end = zv + ht->nNumUsed;
 
 			do {
-				i_zval_ptr_dtor(zv);
+				ZVAL_DTOR_DEFERRED(zv);
 			} while (++zv != end);
 		} else {
 			Bucket *p = ht->arData;
@@ -1849,11 +1872,11 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 
 			if (HT_HAS_STATIC_KEYS_ONLY(ht)) {
 				do {
-					i_zval_ptr_dtor(&p->val);
+					ZVAL_DTOR_DEFERRED(&p->val);
 				} while (++p != end);
 			} else if (HT_IS_WITHOUT_HOLES(ht)) {
 				do {
-					i_zval_ptr_dtor(&p->val);
+					ZVAL_DTOR_DEFERRED(&p->val);
 					if (EXPECTED(p->key)) {
 						zend_string_release_ex(p->key, 0);
 					}
@@ -1861,7 +1884,7 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 			} else {
 				do {
 					if (EXPECTED(Z_TYPE(p->val) != IS_UNDEF)) {
-						i_zval_ptr_dtor(&p->val);
+						ZVAL_DTOR_DEFERRED(&p->val);
 						if (EXPECTED(p->key)) {
 							zend_string_release_ex(p->key, 0);
 						}
@@ -1869,6 +1892,7 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 				} while (++p != end);
 			}
 		}
+#undef ZVAL_DTOR_DEFERRED
 	} else if (EXPECTED(HT_FLAGS(ht) & HASH_FLAG_UNINITIALIZED)) {
 		goto free_ht;
 	}
@@ -1877,6 +1901,11 @@ ZEND_API void ZEND_FASTCALL zend_array_destroy(HashTable *ht)
 free_ht:
 	zend_hash_iterators_remove(ht);
 	FREE_HASHTABLE(ht);
+
+	if (UNEXPECTED(child)) {
+		ht = (HashTable *)child;
+		goto tail_call;
+	}
 }
 
 ZEND_API void ZEND_FASTCALL zend_hash_clean(HashTable *ht)
