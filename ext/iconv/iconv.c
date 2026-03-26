@@ -942,6 +942,8 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 		goto out;
 	}
 
+	buf = safe_emalloc(1, max_line_len, 5);
+
 	cd_pl = iconv_open(ICONV_ASCII_ENCODING, enc);
 	if (cd_pl == (iconv_t)(-1)) {
 		if (errno == EINVAL) {
@@ -961,8 +963,6 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 		}
 		goto out;
 	}
-
-	buf = safe_emalloc(1, max_line_len, 5);
 
 	char_cnt = max_line_len;
 
