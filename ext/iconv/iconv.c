@@ -959,8 +959,6 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 		goto out;
 	}
 
-	buf = safe_emalloc(1, max_line_len, 5);
-
 	cd_pl = iconv_open(ICONV_ASCII_ENCODING, enc);
 	if (cd_pl == (iconv_t)(-1)) {
 		if (errno == EINVAL) {
@@ -984,6 +982,7 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 	char_cnt = max_line_len;
 
 	zend_try {
+	buf = safe_emalloc(1, max_line_len, 5);
 	_php_iconv_appendl(pretval, fname, fname_nbytes, cd_pl);
 	char_cnt -= fname_nbytes;
 	smart_str_appendl(pretval, ": ", sizeof(": ") - 1);
@@ -1189,7 +1188,6 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 	} while (in_left > 0);
 
 	smart_str_0(pretval);
-
 	} zend_catch {
 		bailout = true;
 	} zend_end_try();
