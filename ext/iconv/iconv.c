@@ -920,6 +920,7 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 {
 	php_iconv_err_t err = PHP_ICONV_ERR_SUCCESS;
 	iconv_t cd = (iconv_t)(-1), cd_pl = (iconv_t)(-1);
+	bool bailout = false;
 	size_t char_cnt = 0;
 	size_t out_charset_len;
 	size_t lfchars_len;
@@ -982,7 +983,6 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 
 	char_cnt = max_line_len;
 
-	bool bailout = false;
 	zend_try {
 	_php_iconv_appendl(pretval, fname, fname_nbytes, cd_pl);
 	char_cnt -= fname_nbytes;
@@ -1218,6 +1218,7 @@ out:
 static php_iconv_err_t _php_iconv_mime_decode(smart_str *pretval, const char *str, size_t str_nbytes, const char *enc, const char **next_pos, int mode)
 {
 	php_iconv_err_t err = PHP_ICONV_ERR_SUCCESS;
+	bool bailout = false;
 
 	iconv_t cd = (iconv_t)(-1), cd_pl = (iconv_t)(-1);
 
@@ -1249,7 +1250,6 @@ static php_iconv_err_t _php_iconv_mime_decode(smart_str *pretval, const char *st
 	}
 
 	p1 = str;
-	bool bailout = false;
 	zend_try {
 	for (str_left = str_nbytes; str_left > 0; str_left--, p1++) {
 		int eos = 0;
