@@ -982,8 +982,8 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 
 	char_cnt = max_line_len;
 
+	bool bailout = false;
 	zend_try {
-
 	_php_iconv_appendl(pretval, fname, fname_nbytes, cd_pl);
 	char_cnt -= fname_nbytes;
 	smart_str_appendl(pretval, ": ", sizeof(": ") - 1);
@@ -1191,19 +1191,7 @@ static php_iconv_err_t _php_iconv_mime_encode(smart_str *pretval, const char *fn
 	smart_str_0(pretval);
 
 	} zend_catch {
-		if (cd != (iconv_t)(-1)) {
-			iconv_close(cd);
-		}
-		if (cd_pl != (iconv_t)(-1)) {
-			iconv_close(cd_pl);
-		}
-		if (encoded != NULL) {
-			zend_string_release_ex(encoded, 0);
-		}
-		if (buf != NULL) {
-			efree(buf);
-		}
-		zend_bailout();
+		bailout = true;
 	} zend_end_try();
 
 out:
@@ -1218,6 +1206,9 @@ out:
 	}
 	if (buf != NULL) {
 		efree(buf);
+	}
+	if (bailout) {
+		zend_bailout();
 	}
 	return err;
 }
@@ -1258,6 +1249,7 @@ static php_iconv_err_t _php_iconv_mime_decode(smart_str *pretval, const char *st
 	}
 
 	p1 = str;
+	bool bailout = false;
 	zend_try {
 	for (str_left = str_nbytes; str_left > 0; str_left--, p1++) {
 		int eos = 0;
@@ -1766,13 +1758,7 @@ static php_iconv_err_t _php_iconv_mime_decode(smart_str *pretval, const char *st
 	smart_str_0(pretval);
 
 	} zend_catch {
-		if (cd != (iconv_t)(-1)) {
-			iconv_close(cd);
-		}
-		if (cd_pl != (iconv_t)(-1)) {
-			iconv_close(cd_pl);
-		}
-		zend_bailout();
+		bailout = true;
 	} zend_end_try();
 
 out:
@@ -1781,6 +1767,9 @@ out:
 	}
 	if (cd_pl != (iconv_t)(-1)) {
 		iconv_close(cd_pl);
+	}
+	if (bailout) {
+		zend_bailout();
 	}
 	return err;
 }

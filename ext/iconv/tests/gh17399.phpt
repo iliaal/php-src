@@ -4,9 +4,9 @@ GH-17399 (iconv memory leak with large line-length in iconv_mime_encode)
 iconv
 --FILE--
 <?php
-$options = array(
+$options = [
     'line-length' => PHP_INT_MAX,
-);
+];
 iconv_mime_encode('Subject', 'test', $options);
 ?>
 --EXPECTF--
