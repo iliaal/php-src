@@ -3260,11 +3260,19 @@ static void load_delayed_classes(const zend_class_entry *ce) {
 		return;
 	}
 
-	/* Autoloading can trigger linking of another class, which may register new delayed autoloads.
-	 * For that reason, this code uses a loop that pops and loads the first element of the HT. If
-	 * this triggers linking, then the remaining classes may get loaded when linking the newly
-	 * loaded class. This is important, as otherwise necessary dependencies may not be available
-	 * if the new class is lower in the hierarchy than the current one. */
+	/* Autoloading can trigger linking of another class, which may register new delayed
+	 * autoloads. For that reason, this code uses a loop that pops and loads the first
+	 * element of the HT. If this triggers linking, then the remaining classes may get
+	 * loaded when linking the newly loaded class. This is important, as otherwise
+	 * necessary dependencies may not be available if the new class is lower in the
+	 * hierarchy than the current one.
+	 *
+	 * However, when load_delayed_classes() is called recursively, the shared table may
+	 * contain entries from an outer caller whose dependencies are not yet available.
+	 * Loading such an entry would fail. In nested calls, such failures are caught and
+	 * the entry is re-appended for the outer caller to process later (GH-20112). */
+	CG(delayed_autoloads_depth)++;
+	uint32_t consecutive_failures = 0;
 	HashPosition pos = 0;
 	zend_string *name;
 	zend_ulong idx;
@@ -3273,13 +3281,34 @@ static void load_delayed_classes(const zend_class_entry *ce) {
 		zend_string_addref(name);
 		zend_hash_del(delayed_autoloads, name);
 		zend_lookup_class(name);
-		zend_string_release(name);
 		if (EG(exception)) {
+			if (CG(delayed_autoloads_depth) > 1) {
+				zend_string *lc_name = zend_string_tolower(name);
+				bool class_was_loaded = zend_hash_exists(CG(class_table), lc_name);
+				zend_string_release(lc_name);
+				if (!class_was_loaded) {
+					/* Nested call: class could not be loaded, likely because a
+					 * dependency higher in the call chain is not yet available.
+					 * Re-append for the outer caller to process later. */
+					zend_clear_exception();
+					zend_hash_add_empty_element(delayed_autoloads, name);
+					zend_string_release(name);
+					consecutive_failures++;
+					if (consecutive_failures >= zend_hash_num_elements(delayed_autoloads)) {
+						break;
+					}
+					continue;
+				}
+			}
+			CG(delayed_autoloads_depth)--;
 			zend_exception_uncaught_error(
 				"During inheritance of %s, while autoloading %s",
 				ZSTR_VAL(ce->name), ZSTR_VAL(name));
 		}
+		zend_string_release(name);
+		consecutive_failures = 0;
 	}
+	CG(delayed_autoloads_depth)--;
 }
 
 static void resolve_delayed_variance_obligations(zend_class_entry *ce) {
