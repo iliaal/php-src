@@ -898,7 +898,12 @@ try_again:
 			uint32_t guard_type = ((type == BP_VAR_IS) && zobj->ce->__isset)
 				? IN_ISSET : IN_GET;
 			if ((*instance_guard) & guard_type) {
-				return zend_std_read_property(instance, name, type, cache_slot, rv);
+				retval = zend_std_read_property(instance, name, type, cache_slot, rv);
+				if (retval == &EG(uninitialized_zval)) {
+					ZVAL_NULL(rv);
+					retval = rv;
+				}
+				return retval;
 			}
 		}
 	}
