@@ -1207,8 +1207,8 @@ phpdbg_main:
 			case 'z':
 				zend_extensions_len++;
 				if (zend_extensions) {
-					zend_extensions = realloc(zend_extensions, sizeof(char*) * zend_extensions_len);
-				} else zend_extensions = malloc(sizeof(char*) * zend_extensions_len);
+					zend_extensions = perealloc(zend_extensions, sizeof(char*) * zend_extensions_len, 1);
+				} else zend_extensions = pemalloc(sizeof(char*) * zend_extensions_len, 1);
 				zend_extensions[zend_extensions_len-1] = strdup(php_optarg);
 			break;
 

@@ -240,9 +240,9 @@ static void phpdbg_line_init(char *cmd, struct phpdbg_init_state *state) {
 
 		if (state->in_code) {
 			if (state->code == NULL) {
-				state->code = malloc(cmd_len + 1);
+				state->code = pemalloc(cmd_len + 1, 1);
 			} else {
-				state->code = realloc(state->code, state->code_len + cmd_len + 1);
+				state->code = perealloc(state->code, state->code_len + cmd_len + 1, 1);
 			}
 
 			if (state->code) {
