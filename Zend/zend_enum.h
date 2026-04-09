@@ -69,6 +69,7 @@ static zend_always_inline zval *zend_enum_fetch_case_name(zend_object *zobj)
 	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_ENUM);
 
 	zval *name = OBJ_PROP_NUM(zobj, 0);
+	ZVAL_DEREF(name);
 	ZEND_ASSERT(Z_TYPE_P(name) == IS_STRING);
 	return name;
 }
@@ -77,7 +78,10 @@ static zend_always_inline zval *zend_enum_fetch_case_value(zend_object *zobj)
 {
 	ZEND_ASSERT(zobj->ce->ce_flags & ZEND_ACC_ENUM);
 	ZEND_ASSERT(zobj->ce->enum_backing_type != IS_UNDEF);
-	return OBJ_PROP_NUM(zobj, 1);
+
+	zval *value = OBJ_PROP_NUM(zobj, 1);
+	ZVAL_DEREF(value);
+	return value;
 }
 
 END_EXTERN_C()
