@@ -714,6 +714,9 @@ optimize_type_check:
 								continue;
 							} else if (src->opcode == ZEND_BOOL ||
 							           src->opcode == ZEND_QM_ASSIGN) {
+								if (src->op1_type == IS_VAR) {
+									break;
+								}
 								VAR_SOURCE(opline->op1) = NULL;
 								COPY_NODE(opline->op1, src->op1);
 								MAKE_NOP(src);
