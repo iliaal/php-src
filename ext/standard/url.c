@@ -47,6 +47,17 @@ PHPAPI void php_url_free(php_url *theurl)
 }
 /* }}} */
 
+static zend_always_inline bool php_url_is_scheme_char(unsigned char c)
+{
+	return ((c | 0x20) - 'a' < 26u) || (c - '0' < 10u)
+		|| c == '+' || c == '-' || c == '.';
+}
+
+static zend_always_inline bool php_url_is_ascii_digit(unsigned char c)
+{
+	return c - '0' < 10u;
+}
+
 static void php_replace_controlchars(char *str, size_t len)
 {
 	unsigned char *s = (unsigned char *)str;
@@ -55,8 +66,8 @@ static void php_replace_controlchars(char *str, size_t len)
 	ZEND_ASSERT(str != NULL);
 
 	while (s < e) {
-		if (iscntrl(*s)) {
-			*s='_';
+		if (UNEXPECTED(*s < 0x20 || *s == 0x7f)) {
+			*s = '_';
 		}
 		s++;
 	}
@@ -103,7 +114,7 @@ PHPAPI php_url *php_url_parse_ex2(char const *str, size_t length, bool *has_port
 		p = s;
 		while (p < e) {
 			/* scheme = 1*[ lowalpha | digit | "+" | "-" | "." ] */
-			if (!isalpha(*p) && !isdigit(*p) && *p != '+' && *p != '.' && *p != '-') {
+			if (!php_url_is_scheme_char((unsigned char) *p)) {
 				if (e + 1 < ue && e < binary_strcspn(s, ue, "?#")) {
 					goto parse_port;
 				} else if (s + 1 < ue && *s == '/' && *(s + 1) == '/') { /* relative-scheme URL */
@@ -119,7 +130,6 @@ PHPAPI php_url *php_url_parse_ex2(char const *str, size_t length, bool *has_port
 
 		if (e + 1 == ue) { /* only scheme is available */
 			ret->scheme = zend_string_init(s, (e - s), 0);
-			php_replace_controlchars(ZSTR_VAL(ret->scheme), ZSTR_LEN(ret->scheme));
 			return ret;
 		}
 
@@ -132,7 +142,7 @@ PHPAPI php_url *php_url_parse_ex2(char const *str, size_t length, bool *has_port
 			 * correctly parse things like a.com:80
 			 */
 			p = e + 1;
-			while (p < ue && isdigit(*p)) {
+			while (p < ue && php_url_is_ascii_digit((unsigned char) *p)) {
 				p++;
 			}
 
@@ -141,13 +151,11 @@ PHPAPI php_url *php_url_parse_ex2(char const *str, size_t length, bool *has_port
 			}
 
 			ret->scheme = zend_string_init(s, (e-s), 0);
-			php_replace_controlchars(ZSTR_VAL(ret->scheme), ZSTR_LEN(ret->scheme));
 
 			s = e + 1;
 			goto just_path;
 		} else {
 			ret->scheme = zend_string_init(s, (e-s), 0);
-			php_replace_controlchars(ZSTR_VAL(ret->scheme), ZSTR_LEN(ret->scheme));
 
 			if (e + 2 < ue && *(e + 2) == '/') {
 				s = e + 3;
@@ -172,7 +180,7 @@ PHPAPI php_url *php_url_parse_ex2(char const *str, size_t length, bool *has_port
 		p = e + 1;
 		pp = p;
 
-		while (pp < ue && pp - p < 6 && isdigit(*pp)) {
+		while (pp < ue && pp - p < 6 && php_url_is_ascii_digit((unsigned char) *pp)) {
 			pp++;
 		}
 
