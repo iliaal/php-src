@@ -25,7 +25,12 @@
 struct php_uri_parser_rfc3986_uris {
 	UriUriA uri;
 	UriUriA normalized_uri;
+	zend_long cached_port;
+	unsigned int dirty_mask;
 	bool normalized_uri_initialized;
+	bool normalized_uri_is_alias;
+	bool cached_port_valid;
+	bool dirty_mask_valid;
 };
 
 static void *php_uri_parser_rfc3986_memory_manager_malloc(UriMemoryManager *memory_manager, size_t size)
@@ -85,10 +90,28 @@ ZEND_ATTRIBUTE_NONNULL static void copy_uri(UriUriA *new_uriparser_uri, const Ur
 
 ZEND_ATTRIBUTE_NONNULL static UriUriA *get_normalized_uri(php_uri_parser_rfc3986_uris *uriparser_uris) {
 	if (!uriparser_uris->normalized_uri_initialized) {
+		if (!uriparser_uris->dirty_mask_valid) {
+			int mask_result = uriNormalizeSyntaxMaskRequiredExA(&uriparser_uris->uri, &uriparser_uris->dirty_mask);
+			if (mask_result != URI_SUCCESS) {
+				uriparser_uris->dirty_mask = (unsigned int)-1;
+			}
+			uriparser_uris->dirty_mask_valid = true;
+		}
+
+		if (uriparser_uris->dirty_mask == 0) {
+			uriparser_uris->normalized_uri_is_alias = true;
+			uriparser_uris->normalized_uri_initialized = true;
+			return &uriparser_uris->uri;
+		}
+
 		copy_uri(&uriparser_uris->normalized_uri, &uriparser_uris->uri);
-		int result = uriNormalizeSyntaxExMmA(&uriparser_uris->normalized_uri, (unsigned int)-1, mm);
+		int result = uriNormalizeSyntaxExMmA(&uriparser_uris->normalized_uri, uriparser_uris->dirty_mask, mm);
 		ZEND_ASSERT(result == URI_SUCCESS);
 		uriparser_uris->normalized_uri_initialized = true;
+	}
+
+	if (uriparser_uris->normalized_uri_is_alias) {
+		return &uriparser_uris->uri;
 	}
 
 	return &uriparser_uris->normalized_uri;
@@ -285,14 +308,18 @@ static zend_result php_uri_parser_rfc3986_host_write(void *uri, zval *value, zva
 
 ZEND_ATTRIBUTE_NONNULL static zend_long port_str_to_zend_long_checked(const char *str, size_t len)
 {
-	if (len > MAX_LENGTH_OF_LONG) {
+	/* Caller guarantees str contains only ASCII digits (uriparser validates
+	 * portText during parsing). */
+	if (UNEXPECTED(len == 0 || len > MAX_LENGTH_OF_LONG)) {
 		return -1;
 	}
 
-	char buf[MAX_LENGTH_OF_LONG + 1];
-	*(char*)zend_mempcpy(buf, str, len) = 0;
-
-	zend_ulong result = ZEND_STRTOUL(buf, NULL, 10);
+	zend_ulong result = 0;
+	for (size_t i = 0; i < len; i++) {
+		unsigned char digit = (unsigned char)(str[i] - '0');
+		ZEND_ASSERT(digit <= 9);
+		result = result * 10 + digit;
+	}
 
 	if (result > ZEND_LONG_MAX) {
 		return -1;
@@ -303,11 +330,27 @@ ZEND_ATTRIBUTE_NONNULL static zend_long port_str_to_zend_long_checked(const char
 
 ZEND_ATTRIBUTE_NONNULL static zend_result php_uri_parser_rfc3986_port_read(void *uri, php_uri_component_read_mode read_mode, zval *retval)
 {
+	php_uri_parser_rfc3986_uris *uriparser_uris = uri;
+
+	if (uriparser_uris->cached_port_valid) {
+		if (uriparser_uris->cached_port >= 0) {
+			ZVAL_LONG(retval, uriparser_uris->cached_port);
+		} else {
+			ZVAL_NULL(retval);
+		}
+		return SUCCESS;
+	}
+
 	const UriUriA *uriparser_uri = get_uri_for_reading(uri, read_mode);
 
 	if (has_text_range(&uriparser_uri->portText) && get_text_range_length(&uriparser_uri->portText) > 0) {
-		ZVAL_LONG(retval, port_str_to_zend_long_checked(uriparser_uri->portText.first, get_text_range_length(&uriparser_uri->portText)));
+		zend_long port = port_str_to_zend_long_checked(uriparser_uri->portText.first, get_text_range_length(&uriparser_uri->portText));
+		uriparser_uris->cached_port = port;
+		uriparser_uris->cached_port_valid = true;
+		ZVAL_LONG(retval, port);
 	} else {
+		uriparser_uris->cached_port = -1;
+		uriparser_uris->cached_port_valid = true;
 		ZVAL_NULL(retval);
 	}
 
@@ -316,8 +359,11 @@ ZEND_ATTRIBUTE_NONNULL static zend_result php_uri_parser_rfc3986_port_read(void 
 
 static zend_result php_uri_parser_rfc3986_port_write(void *uri, zval *value, zval *errors)
 {
+	php_uri_parser_rfc3986_uris *uriparser_uris = uri;
 	UriUriA *uriparser_uri = get_uri_for_writing(uri);
 	int result;
+
+	uriparser_uris->cached_port_valid = false;
 
 	if (Z_TYPE_P(value) == IS_NULL) {
 		result = uriSetPortTextMmA(uriparser_uri, NULL, NULL, mm);
@@ -487,8 +533,11 @@ static zend_result php_uri_parser_rfc3986_fragment_write(void *uri, zval *value,
 
 static php_uri_parser_rfc3986_uris *uriparser_create_uris(void)
 {
-	php_uri_parser_rfc3986_uris *uriparser_uris = ecalloc(1, sizeof(*uriparser_uris));
+	php_uri_parser_rfc3986_uris *uriparser_uris = emalloc(sizeof(*uriparser_uris));
 	uriparser_uris->normalized_uri_initialized = false;
+	uriparser_uris->normalized_uri_is_alias = false;
+	uriparser_uris->cached_port_valid = false;
+	uriparser_uris->dirty_mask_valid = false;
 
 	return uriparser_uris;
 }
@@ -545,18 +594,26 @@ php_uri_parser_rfc3986_uris *php_uri_parser_rfc3986_parse_ex(const char *uri_str
 	/* Make the resulting URI independent of the 'uri_str'. */
 	uriMakeOwnerMmA(&uri, mm);
 
+	zend_long parsed_port = -1;
+	bool has_parsed_port = false;
 	if (has_text_range(&uri.portText) && get_text_range_length(&uri.portText) > 0) {
-		if (port_str_to_zend_long_checked(uri.portText.first, get_text_range_length(&uri.portText)) == -1) {
+		parsed_port = port_str_to_zend_long_checked(uri.portText.first, get_text_range_length(&uri.portText));
+		if (parsed_port == -1) {
 			if (!silent) {
 				zend_throw_exception(php_uri_ce_invalid_uri_exception, "The port is out of range", 0);
 			}
 
 			goto fail;
 		}
+		has_parsed_port = true;
 	}
 
 	php_uri_parser_rfc3986_uris *uriparser_uris = uriparser_create_uris();
 	uriparser_uris->uri = uri;
+	if (has_parsed_port) {
+		uriparser_uris->cached_port = parsed_port;
+		uriparser_uris->cached_port_valid = true;
+	}
 
 	return uriparser_uris;
 
@@ -626,7 +683,9 @@ static void php_uri_parser_rfc3986_destroy(void *uri)
 	}
 
 	uriFreeUriMembersMmA(&uriparser_uris->uri, mm);
-	uriFreeUriMembersMmA(&uriparser_uris->normalized_uri, mm);
+	if (uriparser_uris->normalized_uri_initialized && !uriparser_uris->normalized_uri_is_alias) {
+		uriFreeUriMembersMmA(&uriparser_uris->normalized_uri, mm);
+	}
 
 	efree(uriparser_uris);
 }
