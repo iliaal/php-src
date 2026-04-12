@@ -151,6 +151,12 @@ static bool unserialize(void *state, HashTable *data)
 		}
 	}
 
+	/* An all-zero state generates zero forever. The constructor rejects
+	 * such a seed; reject it here for symmetry. */
+	if (UNEXPECTED(s->state[0] == 0 && s->state[1] == 0 && s->state[2] == 0 && s->state[3] == 0)) {
+		return false;
+	}
+
 	return true;
 }
 
