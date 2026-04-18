@@ -926,10 +926,21 @@ zend_result phar_open_entry_fp(phar_entry_info *entry, char **error, int follow_
 	php_stream_seek(phar_get_entrypfp(entry), phar_get_fp_offset(entry), SEEK_SET);
 
 	if (entry->uncompressed_filesize) {
-		if (SUCCESS != php_stream_copy_to_stream_ex(phar_get_entrypfp(entry), ufp, entry->compressed_filesize, NULL)) {
-			spprintf(error, 4096, "phar error: internal corruption of phar \"%s\" (actual filesize mismatch on file \"%s\")", phar->fname, entry->filename);
-			php_stream_filter_remove(filter, 1);
-			return FAILURE;
+		size_t remaining = entry->compressed_filesize;
+		while (remaining > 0) {
+			size_t chunk = remaining < 8192 ? remaining : 8192;
+			size_t n = 0;
+			if (SUCCESS != php_stream_copy_to_stream_ex(phar_get_entrypfp(entry), ufp, chunk, &n)) {
+				goto decompression_error;
+			}
+			if (n == 0) {
+				break;
+			}
+			remaining -= n;
+			php_stream_filter_flush(filter, 0);
+			if (php_stream_tell(ufp) - loc > (zend_off_t) entry->uncompressed_filesize) {
+				goto decompression_error;
+			}
 		}
 	}
 
@@ -952,6 +963,11 @@ zend_result phar_open_entry_fp(phar_entry_info *entry, char **error, int follow_
 		return FAILURE;
 	}
 	return SUCCESS;
+
+decompression_error:
+	spprintf(error, 4096, "phar error: internal corruption of phar \"%s\" (actual filesize mismatch on file \"%s\")", phar->fname, entry->filename);
+	php_stream_filter_remove(filter, 1);
+	return FAILURE;
 }
 /* }}} */
 
