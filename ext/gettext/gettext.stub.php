@@ -3,7 +3,7 @@
 /** @generate-class-entries */
 
 /** @refcount 1 */
-function textdomain(?string $domain = null): string {}
+function textdomain(?string $domain = null): string|false {}
 
 /** @refcount 1 */
 function gettext(string $message): string {}

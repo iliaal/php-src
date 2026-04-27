@@ -99,6 +99,9 @@ PHP_FUNCTION(textdomain)
 	}
 
 	retval = textdomain(domain_name);
+	if (retval == NULL) {
+		RETURN_FALSE;
+	}
 
 	RETURN_STRING(retval);
 }
@@ -212,6 +215,9 @@ PHP_FUNCTION(bindtextdomain)
 	}
 
 	retval = bindtextdomain(ZSTR_VAL(domain), dir_name);
+	if (retval == NULL) {
+		RETURN_FALSE;
+	}
 
 	RETURN_STRING(retval);
 }
