@@ -273,6 +273,8 @@ static void pgsql_lob_free_obj(zend_object *obj)
 
 /* Compatibility definitions */
 
+static inline zend_result build_tablename(smart_str *querystr, PGconn *pg_link, const zend_string *table);
+
 static zend_string *_php_pgsql_trim_message(const char *message)
 {
 	size_t i = strlen(message);
@@ -3464,7 +3466,6 @@ PHP_FUNCTION(pg_copy_from)
 	zend_string *pg_delimiter = NULL;
 	char *pg_null_as = "\\\\N";
 	size_t pg_null_as_len;
-	char *query;
 	PGconn *pgsql;
 	PGresult *pgsql_result;
 	ExecStatusType status;
@@ -3489,13 +3490,21 @@ PHP_FUNCTION(pg_copy_from)
 		RETURN_THROWS();
 	}
 
-	spprintf(&query, 0, "COPY %s FROM STDIN DELIMITER E'%c' NULL AS E'%s'", ZSTR_VAL(table_name), *ZSTR_VAL(pg_delimiter), pg_null_as);
+	smart_str querystr = {0};
+	smart_str_appends(&querystr, "COPY ");
+	if (build_tablename(&querystr, pgsql, table_name) == FAILURE) {
+		smart_str_free(&querystr);
+		RETURN_FALSE;
+	}
+	smart_str_append_printf(&querystr, " FROM STDIN DELIMITER E'%c' NULL AS E'%s'", *ZSTR_VAL(pg_delimiter), pg_null_as);
+	smart_str_0(&querystr);
+
 	while ((pgsql_result = PQgetResult(pgsql))) {
 		PQclear(pgsql_result);
 	}
-	pgsql_result = PQexec(pgsql, query);
+	pgsql_result = PQexec(pgsql, ZSTR_VAL(querystr.s));
 
-	efree(query);
+	smart_str_free(&querystr);
 
 	if (pgsql_result) {
 		status = PQresultStatus(pgsql_result);
