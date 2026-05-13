@@ -7301,7 +7301,9 @@ PHP_FUNCTION(openssl_sign)
 		RETVAL_TRUE;
 	} else {
 		php_openssl_store_errors();
-		efree(sigbuf);
+		if (sigbuf != NULL) {
+			zend_string_release(sigbuf);
+		}
 		RETVAL_FALSE;
 	}
 	EVP_MD_CTX_destroy(md_ctx);
