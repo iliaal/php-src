@@ -130,6 +130,9 @@ struct _php_stream_filter {
 
 	/* filters are auto_registered when they're applied */
 	zend_resource *res;
+
+	uint32_t in_callback;
+	bool deferred_dtor;
 };
 
 /* stack filter onto a stream */

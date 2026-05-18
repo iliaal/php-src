@@ -465,10 +465,17 @@ PHPAPI zend_result _php_stream_filter_flush(php_stream_filter *filter, bool fini
 	chain = filter->chain;
 	stream = chain->stream;
 
-	for(current = filter; current; current = current->next) {
+	php_stream_filter *next_filter;
+	for (current = filter; current; current = next_filter) {
 		php_stream_filter_status_t status;
 
+		next_filter = current->next;
+		current->in_callback++;
 		status = current->fops->filter(stream, current, inp, outp, NULL, flags);
+		current->in_callback--;
+		if (current->deferred_dtor && current->in_callback == 0) {
+			php_stream_filter_free(current);
+		}
 		if (status == PSFS_FEED_ME) {
 			/* We've flushed the data far enough */
 			return SUCCESS;
@@ -550,6 +557,10 @@ PHPAPI php_stream_filter *php_stream_filter_remove(php_stream_filter *filter, bo
 	}
 
 	if (call_dtor) {
+		if (filter->in_callback) {
+			filter->deferred_dtor = true;
+			return NULL;
+		}
 		php_stream_filter_free(filter);
 		return NULL;
 	}

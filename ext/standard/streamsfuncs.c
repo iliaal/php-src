@@ -1304,9 +1304,21 @@ PHP_FUNCTION(stream_filter_remove)
 		RETURN_THROWS();
 	}
 
-	if (php_stream_filter_flush(filter, 1) == FAILURE) {
+	filter->in_callback++;
+	zend_result flush_result = php_stream_filter_flush(filter, 1);
+	filter->in_callback--;
+
+	if (flush_result == FAILURE) {
+		if (filter->deferred_dtor && filter->in_callback == 0) {
+			php_stream_filter_free(filter);
+		}
 		php_error_docref(NULL, E_WARNING, "Unable to flush filter, not removing");
 		RETURN_FALSE;
+	}
+
+	if (filter->deferred_dtor && filter->in_callback == 0) {
+		php_stream_filter_free(filter);
+		RETURN_TRUE;
 	}
 
 	zend_list_close(Z_RES_P(zfilter));
