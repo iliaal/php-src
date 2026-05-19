@@ -210,6 +210,15 @@ static php_stream_filter_status_t userfilter_filter(
 
 	ZVAL_BOOL(&args[3], flags & PSFS_FLAG_FLUSH_CLOSE);
 
+	/* Pin the filter across the userland call. The callback can remove our
+	 * own resource via stream_filter_remove(), which would otherwise free
+	 * thisfilter under our subsequent &thisfilter->abstract deref and under
+	 * the chain iterator's `current = current->next` advance. */
+	zend_resource *pin = thisfilter->res;
+	if (pin) {
+		GC_ADDREF(pin);
+	}
+
 	call_result = call_user_function(NULL,
 			obj,
 			&func_name,
@@ -251,6 +260,10 @@ static php_stream_filter_status_t userfilter_filter(
 
 	stream->flags &= ~PHP_STREAM_FLAG_NO_FCLOSE;
 	stream->flags |= orig_no_fclose;
+
+	if (pin) {
+		zend_list_delete(pin);
+	}
 
 	return ret;
 }

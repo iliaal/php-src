@@ -489,15 +489,9 @@ fprintf(stderr, "stream_free: %s:%p[%s] preserve_handle=%d release_cast=%d remov
 
 	if (close_options & PHP_STREAM_FREE_RELEASE_STREAM) {
 		while (stream->readfilters.head) {
-			if (stream->readfilters.head->res != NULL) {
-				zend_list_close(stream->readfilters.head->res);
-			}
 			php_stream_filter_remove(stream->readfilters.head, 1);
 		}
 		while (stream->writefilters.head) {
-			if (stream->writefilters.head->res != NULL) {
-				zend_list_close(stream->writefilters.head->res);
-			}
 			php_stream_filter_remove(stream->writefilters.head, 1);
 		}
 
@@ -1922,6 +1916,15 @@ static void stream_resource_persistent_dtor(zend_resource *rsrc)
 	FG(pclose_ret) = php_stream_free(stream, PHP_STREAM_FREE_CLOSE | PHP_STREAM_FREE_RSRC_DTOR);
 }
 
+static void stream_filter_resource_dtor(zend_resource *rsrc)
+{
+	php_stream_filter *filter = (php_stream_filter *)rsrc->ptr;
+	if (filter) {
+		filter->res = NULL;
+		php_stream_filter_free(filter);
+	}
+}
+
 void php_shutdown_stream_hashes(void)
 {
 	FG(user_stream_current_filename) = NULL;
@@ -1949,8 +1952,7 @@ zend_result php_init_stream_wrappers(int module_number)
 	le_stream = zend_register_list_destructors_ex(stream_resource_regular_dtor, NULL, "stream", module_number);
 	le_pstream = zend_register_list_destructors_ex(NULL, stream_resource_persistent_dtor, "persistent stream", module_number);
 
-	/* Filters are cleaned up by the streams they're attached to */
-	le_stream_filter = zend_register_list_destructors_ex(NULL, NULL, "stream filter", module_number);
+	le_stream_filter = zend_register_list_destructors_ex(stream_filter_resource_dtor, NULL, "stream filter", module_number);
 
 	zend_hash_init(&url_stream_wrappers_hash, 8, NULL, NULL, 1);
 	zend_hash_init(php_get_stream_filters_hash_global(), 8, NULL, NULL, 1);

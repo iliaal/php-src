@@ -534,6 +534,11 @@ PHPAPI zend_result _php_stream_filter_flush(php_stream_filter *filter, bool fini
 
 PHPAPI php_stream_filter *php_stream_filter_remove(php_stream_filter *filter, bool call_dtor)
 {
+	if (!filter->chain) {
+		/* Already removed from a chain (re-entry from a recursive remove). */
+		return call_dtor ? NULL : filter;
+	}
+
 	if (filter->prev) {
 		filter->prev->next = filter->next;
 	} else {
@@ -544,9 +549,13 @@ PHPAPI php_stream_filter *php_stream_filter_remove(php_stream_filter *filter, bo
 	} else {
 		filter->chain->tail = filter->prev;
 	}
+	filter->chain = NULL;
 
 	if (filter->res) {
+		/* Resource dtor (stream_filter_resource_dtor) frees the filter once
+		 * every C-level frame releases its refcount. */
 		zend_list_delete(filter->res);
+		return call_dtor ? NULL : filter;
 	}
 
 	if (call_dtor) {

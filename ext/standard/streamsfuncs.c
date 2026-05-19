@@ -1304,13 +1304,20 @@ PHP_FUNCTION(stream_filter_remove)
 		RETURN_THROWS();
 	}
 
-	if (php_stream_filter_flush(filter, 1) == FAILURE) {
+	/* Pin the resource across the closing flush: a userland filter callback
+	 * may recursively call stream_filter_remove on us, which would otherwise
+	 * free the filter while we still hold a raw pointer to it. */
+	GC_ADDREF(Z_RES_P(zfilter));
+	zend_result flush_result = php_stream_filter_flush(filter, 1);
+
+	if (flush_result == FAILURE) {
+		zend_list_delete(Z_RES_P(zfilter));
 		php_error_docref(NULL, E_WARNING, "Unable to flush filter, not removing");
 		RETURN_FALSE;
 	}
 
-	zend_list_close(Z_RES_P(zfilter));
 	php_stream_filter_remove(filter, 1);
+	zend_list_delete(Z_RES_P(zfilter));
 	RETURN_TRUE;
 }
 /* }}} */
