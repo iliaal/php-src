@@ -849,7 +849,21 @@ static zend_always_inline void zend_call_known_fcc(
 		memcpy(func, fcc->function_handler, sizeof(zend_function));
 		zend_string_addref(func->op_array.function_name);
 	}
+	zend_object *pinned_object = fcc->object;
+	zend_object *pinned_closure = fcc->closure;
+	if (pinned_object) {
+		GC_ADDREF(pinned_object);
+	}
+	if (pinned_closure) {
+		GC_ADDREF(pinned_closure);
+	}
 	zend_call_known_function(func, fcc->object, fcc->called_scope, retval_ptr, param_count, params, named_params);
+	if (pinned_object) {
+		OBJ_RELEASE(pinned_object);
+	}
+	if (pinned_closure) {
+		OBJ_RELEASE(pinned_closure);
+	}
 }
 
 /* Call the provided zend_function instance method on an object. */

@@ -439,7 +439,21 @@ static zend_class_entry *spl_perform_autoload(zend_string *class_name, zend_stri
 
 		zval param;
 		ZVAL_STR(&param, class_name);
+		zend_object *pinned_obj = alfi->obj;
+		zend_object *pinned_closure = alfi->closure;
+		if (pinned_obj) {
+			GC_ADDREF(pinned_obj);
+		}
+		if (pinned_closure) {
+			GC_ADDREF(pinned_closure);
+		}
 		zend_call_known_function(func, alfi->obj, alfi->ce, NULL, 1, &param, NULL);
+		if (pinned_obj) {
+			OBJ_RELEASE(pinned_obj);
+		}
+		if (pinned_closure) {
+			OBJ_RELEASE(pinned_closure);
+		}
 		if (EG(exception)) {
 			break;
 		}

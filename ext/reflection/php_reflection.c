@@ -2074,6 +2074,7 @@ ZEND_METHOD(ReflectionFunction, invoke)
 	fcc.function_handler = fptr;
 	fcc.called_scope = NULL;
 	fcc.object = NULL;
+	fcc.closure = NULL;
 
 	if (!Z_ISUNDEF(intern->obj)) {
 		Z_OBJ_HT(intern->obj)->get_closure(
@@ -2113,6 +2114,7 @@ ZEND_METHOD(ReflectionFunction, invokeArgs)
 	fcc.function_handler = fptr;
 	fcc.called_scope = NULL;
 	fcc.object = NULL;
+	fcc.closure = NULL;
 
 	if (!Z_ISUNDEF(intern->obj)) {
 		Z_OBJ_HT(intern->obj)->get_closure(
