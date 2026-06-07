@@ -4490,6 +4490,9 @@ static int _php_mbstr_parse_mail_headers(HashTable *ht, const char *str, size_t 
 
 								zend_string_release_ex(fld_name, 0);
 							}
+							else if (fld_name != NULL) {
+								zend_string_release_ex(fld_name, 0);
+							}
 
 							fld_name = fld_val = NULL;
 							token = (char*)ps;
@@ -4533,6 +4536,9 @@ out:
 			ZVAL_STR(&val, fld_val);
 			zend_hash_update(ht, fld_name, &val);
 
+			zend_string_release_ex(fld_name, 0);
+		}
+		else if (fld_name != NULL) {
 			zend_string_release_ex(fld_name, 0);
 		}
 	}
