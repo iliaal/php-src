@@ -25,6 +25,11 @@ PHP                                                                        NEWS
   . Fix stmt->query leak in mysqli_execute_query() validation errors.
     (David Carlier)
 
+- Opcache:
+  . Fixed bug GH-22158 (Tracing JIT dispatches the observer begin handler
+    through the wrong run_time_cache slot on megamorphic calls). (ptondereau,
+    iliaal)
+
 - Phar:
   . Fixed a bypass of the magic ".phar" directory protection in
     Phar::addEmptyDir() for paths starting with "/.phar", while allowing
