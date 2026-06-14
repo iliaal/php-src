@@ -168,6 +168,10 @@ PHPAPI php_poll_ctx *php_poll_create(php_poll_backend_type preferred_backend, ui
 /* Create new poll context */
 PHPAPI php_poll_ctx *php_poll_create_by_name(const char *preferred_backend, uint32_t flags)
 {
+	if (!preferred_backend) {
+		return NULL;
+	}
+
 	if (!strcmp(preferred_backend, "auto")) {
 		return php_poll_create(PHP_POLL_BACKEND_AUTO, flags);
 	}
