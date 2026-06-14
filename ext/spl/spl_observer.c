@@ -94,8 +94,16 @@ static zend_result spl_object_storage_get_hash(zend_hash_key *key, spl_SplObject
 		ZVAL_OBJ(&param, obj);
 		ZVAL_UNDEF(&rv);
 		spl_object_storage_get_hash_depth++;
-		zend_call_method_with_1_params(&intern->std, intern->std.ce, &intern->fptr_get_hash, "getHash", &rv, &param);
+		bool bailout = false;
+		zend_try {
+			zend_call_method_with_1_params(&intern->std, intern->std.ce, &intern->fptr_get_hash, "getHash", &rv, &param);
+		} zend_catch {
+			bailout = true;
+		} zend_end_try();
 		spl_object_storage_get_hash_depth--;
+		if (UNEXPECTED(bailout)) {
+			zend_bailout();
+		}
 		if (UNEXPECTED(Z_ISUNDEF(rv))) {
 			/* An exception has occurred */
 			return FAILURE;
