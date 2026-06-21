@@ -224,7 +224,7 @@ PHP_FUNCTION(shmop_read)
 	zend_long start, count;
 	php_shmop *shmop;
 	char *startaddr;
-	int bytes;
+	zend_long bytes;
 	zend_string *return_string;
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "Oll", &shmid, shmop_ce, &start, &count) == FAILURE) {
