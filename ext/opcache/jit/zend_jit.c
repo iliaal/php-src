@@ -2934,7 +2934,7 @@ done:
 			}
 		}
 		if (!zend_jit_leave_func(&ctx, op_array, NULL, MAY_BE_ANY, left_frame,
-				NULL, NULL, (ssa->cfg.flags & ZEND_FUNC_INDIRECT_VAR_ACCESS) != 0, 1)) {
+				NULL, NULL, (ssa->cfg.flags & ZEND_FUNC_INDIRECT_VAR_ACCESS) != 0)) {
 			goto jit_failure;
 		}
 	}

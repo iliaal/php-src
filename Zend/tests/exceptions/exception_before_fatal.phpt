@@ -56,9 +56,9 @@ try {
 ?>
 --EXPECT--
 string(23) "Undefined variable $foo"
+string(45) "Class name must be a valid object or a string"
+string(22) "Can only throw objects"
 string(23) "Undefined variable $foo"
-string(23) "Undefined variable $foo"
-string(23) "Undefined variable $foo"
-string(23) "Undefined variable $foo"
-string(23) "Undefined variable $foo"
+string(45) "Class name must be a valid object or a string"
+string(65) "clone(): Argument #1 ($object) must be of type object, null given"
 string(23) "Undefined variable $foo"

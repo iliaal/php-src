@@ -1157,6 +1157,10 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV 
 	SAVE_OPLINE();
 #endif
 
+	if (UNEXPECTED(EG(deferred_errors).size)) {
+		zend_flush_deferred_errors();
+	}
+
 	if (EXPECTED((call_info & (ZEND_CALL_CODE|ZEND_CALL_TOP|ZEND_CALL_HAS_SYMBOL_TABLE|ZEND_CALL_FREE_EXTRA_ARGS|ZEND_CALL_ALLOCATED|ZEND_CALL_HAS_EXTRA_NAMED_PARAMS)) == 0)) {
 		EG(current_execute_data) = EX(prev_execute_data);
 		i_free_compiled_variables(execute_data);
@@ -4040,23 +4044,33 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV 
 #endif
 	if (zend_atomic_bool_load_ex(&EG(timed_out))) {
 		zend_timeout();
-	} else if (zend_interrupt_function) {
-		zend_interrupt_function(execute_data);
-		if (EG(exception)) {
-			/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
-			const zend_op *throw_op = EG(opline_before_exception);
-
-			if (throw_op
-			 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
-			 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
-			 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
-			 && throw_op->opcode != ZEND_ROPE_INIT
-			 && throw_op->opcode != ZEND_ROPE_ADD) {
-				ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
-
-			}
+	} else {
+		bool entered = false;
+		if (EG(deferred_errors).size) {
+			zend_flush_deferred_errors();
+			entered = true;
 		}
-		ZEND_VM_ENTER();
+		if (zend_interrupt_function) {
+			zend_interrupt_function(execute_data);
+			entered = true;
+		}
+		if (entered) {
+			if (EG(exception)) {
+				/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
+				const zend_op *throw_op = EG(opline_before_exception);
+
+				if (throw_op
+				 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
+				 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
+				 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
+				 && throw_op->opcode != ZEND_ROPE_INIT
+				 && throw_op->opcode != ZEND_ROPE_ADD) {
+					ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
+
+				}
+			}
+			ZEND_VM_ENTER();
+		}
 	}
 	ZEND_VM_CONTINUE();
 }
@@ -53962,6 +53976,10 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV  zend
 	SAVE_OPLINE();
 #endif
 
+	if (UNEXPECTED(EG(deferred_errors).size)) {
+		zend_flush_deferred_errors();
+	}
+
 	if (EXPECTED((call_info & (ZEND_CALL_CODE|ZEND_CALL_TOP|ZEND_CALL_HAS_SYMBOL_TABLE|ZEND_CALL_FREE_EXTRA_ARGS|ZEND_CALL_ALLOCATED|ZEND_CALL_HAS_EXTRA_NAMED_PARAMS)) == 0)) {
 		EG(current_execute_data) = EX(prev_execute_data);
 		i_free_compiled_variables(execute_data);
@@ -56729,23 +56747,33 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV  zend
 #endif
 	if (zend_atomic_bool_load_ex(&EG(timed_out))) {
 		zend_timeout();
-	} else if (zend_interrupt_function) {
-		zend_interrupt_function(execute_data);
-		if (EG(exception)) {
-			/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
-			const zend_op *throw_op = EG(opline_before_exception);
-
-			if (throw_op
-			 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
-			 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
-			 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
-			 && throw_op->opcode != ZEND_ROPE_INIT
-			 && throw_op->opcode != ZEND_ROPE_ADD) {
-				ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
-
-			}
+	} else {
+		bool entered = false;
+		if (EG(deferred_errors).size) {
+			zend_flush_deferred_errors();
+			entered = true;
 		}
-		ZEND_VM_ENTER();
+		if (zend_interrupt_function) {
+			zend_interrupt_function(execute_data);
+			entered = true;
+		}
+		if (entered) {
+			if (EG(exception)) {
+				/* We have to UNDEF result, because ZEND_HANDLE_EXCEPTION is going to free it */
+				const zend_op *throw_op = EG(opline_before_exception);
+
+				if (throw_op
+				 && throw_op->result_type & (IS_TMP_VAR|IS_VAR)
+				 && throw_op->opcode != ZEND_ADD_ARRAY_ELEMENT
+				 && throw_op->opcode != ZEND_ADD_ARRAY_UNPACK
+				 && throw_op->opcode != ZEND_ROPE_INIT
+				 && throw_op->opcode != ZEND_ROPE_ADD) {
+					ZVAL_UNDEF(ZEND_CALL_VAR(EG(current_execute_data), throw_op->result.var));
+
+				}
+			}
+			ZEND_VM_ENTER();
+		}
 	}
 	ZEND_VM_CONTINUE();
 }
@@ -110303,6 +110331,10 @@ zend_leave_helper_SPEC_LABEL:
 	/* zend_leave_helper may be called with opline=call_leave_op in TAILCALL VM */
 	SAVE_OPLINE();
 #endif
+
+	if (UNEXPECTED(EG(deferred_errors).size)) {
+		zend_flush_deferred_errors();
+	}
 
 	if (EXPECTED((call_info & (ZEND_CALL_CODE|ZEND_CALL_TOP|ZEND_CALL_HAS_SYMBOL_TABLE|ZEND_CALL_FREE_EXTRA_ARGS|ZEND_CALL_ALLOCATED|ZEND_CALL_HAS_EXTRA_NAMED_PARAMS)) == 0)) {
 		EG(current_execute_data) = EX(prev_execute_data);

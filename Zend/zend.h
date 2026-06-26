@@ -453,6 +453,8 @@ ZEND_API void zend_begin_record_errors(void);
 ZEND_API void zend_emit_recorded_errors(void);
 ZEND_API void zend_emit_recorded_errors_ex(uint32_t num_errors, zend_error_info **errors);
 ZEND_API void zend_free_recorded_errors(void);
+ZEND_API void zend_flush_deferred_errors(void);
+ZEND_API void zend_free_deferred_errors(void);
 END_EXTERN_C()
 
 #define DEBUG_BACKTRACE_PROVIDE_OBJECT (1<<0)

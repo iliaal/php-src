@@ -17,5 +17,8 @@ try {
     echo $e->getMessage(), "\n";
 }
 ?>
---EXPECT--
-Undefined variable $b
+--EXPECTF--
+Fatal error: Uncaught Error: Undefined constant "NOT_REACHED" in %s:%d
+Stack trace:
+#0 {main}
+  thrown in %s on line %d

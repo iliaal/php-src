@@ -83,8 +83,6 @@ echo "Done";
 ?>
 --EXPECT--
 *** Testing method_exists() : usage variations ***
-Error: 2 - Undefined variable $undefined_var
-Error: 2 - Undefined variable $unset_var
 
 Arg value 0 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, int given
@@ -112,23 +110,18 @@ method_exists(): Argument #1 ($object_or_class) must be of type object|string, f
 
 Arg value 0.5 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, float given
-Error: 2 - Array to string conversion
 
 Arg value Array 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
-Error: 2 - Array to string conversion
 
 Arg value Array 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
-Error: 2 - Array to string conversion
 
 Arg value Array 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
-Error: 2 - Array to string conversion
 
 Arg value Array 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
-Error: 2 - Array to string conversion
 
 Arg value Array 
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given

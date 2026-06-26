@@ -20,5 +20,8 @@ try {
     echo "Exception: " . $e->getMessage() . "\n";
 }
 ?>
---EXPECT--
-Exception: Undefined variable $a
+--EXPECTF--
+Fatal error: Uncaught Error: Call to undefined function undefined_function() in %s:%d
+Stack trace:
+#0 {main}
+  thrown in %s on line %d

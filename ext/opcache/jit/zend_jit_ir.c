@@ -2073,16 +2073,17 @@ static int zend_jit_interrupt_handler_stub(zend_jit_ctx *jit)
 	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_timeout));
 	ir_MERGE_WITH_EMPTY_TRUE(if_timeout);
 
+	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
 	if (zend_interrupt_function) {
 		ir_CALL_1(IR_VOID, ir_CONST_FUNC(zend_interrupt_function), jit_FP(jit));
-		if_exception = ir_IF(ir_LOAD_A(jit_EG(exception)));
-		ir_IF_TRUE(if_exception);
-		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_jit_exception_in_interrupt_handler_helper));
-		ir_MERGE_WITH_EMPTY_FALSE(if_exception);
-
-		jit_STORE_FP(jit, ir_LOAD_A(jit_EG(current_execute_data)));
-		jit_STORE_IP(jit, ir_LOAD_A(jit_EX(opline)));
 	}
+	if_exception = ir_IF(ir_LOAD_A(jit_EG(exception)));
+	ir_IF_TRUE(if_exception);
+	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_jit_exception_in_interrupt_handler_helper));
+	ir_MERGE_WITH_EMPTY_FALSE(if_exception);
+
+	jit_STORE_FP(jit, ir_LOAD_A(jit_EG(current_execute_data)));
+	jit_STORE_IP(jit, ir_LOAD_A(jit_EX(opline)));
 
 	if (GCC_GLOBAL_REGS || ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL) {
 		zend_jit_tailcall_handler(jit, ir_LOAD_A(jit_IP(jit)));
@@ -2527,9 +2528,6 @@ static int zend_jit_trace_exit_stub(zend_jit_ctx *jit)
 
 	ref = ir_LOAD_A(jit_EX(opline));
 	jit_STORE_IP(jit, ref);
-
-	// check for interrupt (try to avoid this ???)
-	zend_jit_check_timeout(jit, NULL, NULL);
 
 	addr = zend_jit_orig_opline_handler(jit);
 	if (GCC_GLOBAL_REGS || ZEND_VM_KIND == ZEND_VM_KIND_TAILCALL) {
@@ -10046,6 +10044,15 @@ static int zend_jit_do_fcall(zend_jit_ctx *jit, const zend_op *opline, const zen
 	const zend_op *prev_opline;
 	ir_ref rx, func_ref = IR_UNUSED, if_user = IR_UNUSED, user_path = IR_UNUSED;
 
+	{
+		ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
+		ir_IF_TRUE_cold(if_deferred);
+		ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
+		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
+		ir_GUARD_NOT(ir_LOAD_A(jit_EG(exception)), jit_STUB_ADDR(jit, jit_stub_exception_handler));
+		ir_MERGE_WITH_EMPTY_FALSE(if_deferred);
+	}
+
 	prev_opline = opline - 1;
 	while (prev_opline->opcode == ZEND_EXT_FCALL_BEGIN || prev_opline->opcode == ZEND_TICKS) {
 		prev_opline--;
@@ -10723,7 +10730,7 @@ static int zend_jit_do_fcall(zend_jit_ctx *jit, const zend_op *opline, const zen
 		 */
 		if (!zend_interrupt_function) {
 			// TODO: Can we avoid checking for interrupts after each call ???
-			if (trace && jit->last_valid_opline != opline) {
+			if (trace) {
 				int32_t exit_point = zend_jit_trace_get_exit_point(opline + 1, ZEND_JIT_EXIT_TO_VM);
 
 				exit_addr = zend_jit_trace_get_exit_addr(exit_point);
@@ -11064,8 +11071,7 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
                                bool             left_frame,
                                zend_jit_trace_rec   *trace,
                                zend_jit_trace_info  *trace_info,
-                               int                   indirect_var_access,
-                               int                   may_throw)
+                               int                   indirect_var_access)
 {
 	bool may_be_top_frame =
 		JIT_G(trigger) != ZEND_JIT_ON_HOT_TRACE ||
@@ -11088,6 +11094,14 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 		 !JIT_G(current_frame) ||
 		 !TRACE_FRAME_NO_NEED_RELEASE_THIS(JIT_G(current_frame)));
 	ir_ref call_info = IR_UNUSED, ref, cold_path = IR_UNUSED;
+
+	{
+		ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
+		ir_IF_TRUE_cold(if_deferred);
+		ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
+		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
+		ir_MERGE_WITH_EMPTY_FALSE(if_deferred);
+	}
 
 	if (may_need_call_helper) {
 		if (!left_frame) {
@@ -11170,8 +11184,6 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 		if (fast_path) {
 			ir_MERGE_WITH(fast_path);
 		}
-		// TODO: avoid EG(excption) check for $this->foo() calls
-		may_throw = 1;
 	}
 
 	// JIT: EG(vm_stack_top) = (zval*)execute_data
@@ -11214,13 +11226,8 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 		 && (!JIT_G(current_frame) || TRACE_FRAME_IS_UNKNOWN_RETURN(JIT_G(current_frame)))) {
 			const zend_op *next_opline = trace->opline;
 
-			if ((opline->op1_type & (IS_VAR|IS_TMP_VAR))
-			 && (op1_info & MAY_BE_RC1)
-			 && (op1_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY))) {
-				/* exception might be thrown during destruction of unused return value */
-				// JIT: if (EG(exception))
-				ir_GUARD_NOT(ir_LOAD_A(jit_EG(exception)), jit_STUB_ADDR(jit, jit_stub_leave_throw));
-			}
+			// JIT: if (EG(exception))
+			ir_GUARD_NOT(ir_LOAD_A(jit_EG(exception)), jit_STUB_ADDR(jit, jit_stub_leave_throw));
 			do {
 				trace++;
 			} while (trace->op == ZEND_JIT_TRACE_INIT_CALL);
@@ -11252,11 +11259,7 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 			zend_jit_set_last_valid_opline(jit, trace->opline);
 
 			return 1;
-		} else if (may_throw ||
-				(((opline->op1_type & (IS_VAR|IS_TMP_VAR))
-				  && (op1_info & MAY_BE_RC1)
-				  && (op1_info & (MAY_BE_OBJECT|MAY_BE_RESOURCE|MAY_BE_ARRAY_OF_OBJECT|MAY_BE_ARRAY_OF_RESOURCE|MAY_BE_ARRAY_OF_ARRAY)))
-				 && (!JIT_G(current_frame) || TRACE_FRAME_IS_RETURN_VALUE_UNUSED(JIT_G(current_frame))))) {
+		} else {
 			// JIT: if (EG(exception))
 			ir_GUARD_NOT(ir_LOAD_A(jit_EG(exception)), jit_STUB_ADDR(jit, jit_stub_leave_throw));
 		}
