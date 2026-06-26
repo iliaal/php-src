@@ -259,6 +259,7 @@ static void collator_sort_internal( int renumber, INTERNAL_FUNCTION_PARAMETERS )
 	UCollator*     saved_collator;
 	zval*          array            = NULL;
 	HashTable*     hash             = NULL;
+	zend_array*    sorted           = NULL;
 	zend_long           sort_flags       = COLLATOR_SORT_REGULAR;
 
 	COLLATOR_METHOD_INIT_VARS
@@ -292,7 +293,14 @@ static void collator_sort_internal( int renumber, INTERNAL_FUNCTION_PARAMETERS )
 	INTL_G( current_collator ) = co->ucoll;
 
 	/* Sort specified array. */
-	zend_hash_sort(hash, collator_compare_func, renumber);
+	sorted = zend_array_dup( hash );
+	zend_hash_sort( sorted, collator_compare_func, renumber );
+
+	zval garbage;
+	ZVAL_COPY_VALUE( &garbage, array );
+	ZVAL_ARR( array, sorted );
+	zval_ptr_dtor( &garbage );
+	hash = sorted;
 
 	/* Restore saved collator. */
 	INTL_G( current_collator ) = saved_collator;
