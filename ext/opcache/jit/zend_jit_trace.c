@@ -5989,8 +5989,13 @@ static const void *zend_jit_trace(zend_jit_trace_rec *trace_buffer, uint32_t par
 						if (!JIT_G(current_frame)
 						 || !JIT_G(current_frame)->call
 						 || !JIT_G(current_frame)->call->func
-						 || !TRACE_FRAME_IS_LAST_SEND_BY_VAL(JIT_G(current_frame)->call)) {
+						 || TRACE_FRAME_IS_LAST_SEND_BY_REF(JIT_G(current_frame)->call)) {
 							break;
+						}
+						if (!TRACE_FRAME_IS_LAST_SEND_BY_VAL(JIT_G(current_frame)->call)) {
+							if (!zend_jit_func_arg_by_ref_guard(&ctx, opline)) {
+								goto jit_failure;
+							}
 						}
 						ZEND_FALLTHROUGH;
 					case ZEND_FETCH_OBJ_R:
