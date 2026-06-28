@@ -11151,9 +11151,11 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 	{
 		ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
 		ir_IF_TRUE_cold(if_deferred);
+		ir_ref saved_ced = ir_LOAD_A(jit_EG(current_execute_data));
 		ir_STORE(jit_EX(opline), jit_IP(jit));
 		ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
 		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
+		ir_STORE(jit_EG(current_execute_data), saved_ced);
 		ir_MERGE_WITH_EMPTY_FALSE(if_deferred);
 	}
 
