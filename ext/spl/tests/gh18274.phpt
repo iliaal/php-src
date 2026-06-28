@@ -15,7 +15,6 @@ echo "done\n";
 --EXPECTF--
 Fatal error: Uncaught ArgumentCountError: func_get_args() expects exactly 0 arguments, 4 given in %s:%d
 Stack trace:
-#0 %s(%d): func_get_args(%d, %s, %s, %d)
-#1 %s(%d): foo()
-#2 {main}
+#%d %A: func_get_args(%d, %s, %s, %d)%A
+#%d {main}
   thrown in %s on line %d

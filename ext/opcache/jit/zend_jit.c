@@ -1425,6 +1425,7 @@ static int zend_jit(const zend_op_array *op_array, zend_ssa *ssa, const zend_op 
 	int call_level = 0;
 	void *checkpoint = NULL;
 	bool recv_emitted = false;   /* emitted at least one RECV opcode */
+	bool entry_flush_emitted = false;
 	uint8_t smart_branch_opcode;
 	uint32_t target_label, target_label2;
 	uint32_t op1_info, op1_def_info, op2_info, res_info, res_use_info, op1_mem_info;
@@ -1604,12 +1605,25 @@ static int zend_jit(const zend_op_array *op_array, zend_ssa *ssa, const zend_op 
 				phi = phi->next;
 			}
 		}
+		if ((ssa->cfg.blocks[b].flags & ZEND_BB_TARGET)
+		 && ssa->cfg.blocks[b].start != 0) {
+			if (!zend_jit_deferred_error_deopt(&ctx, op_array, ssa, b, op_array->opcodes + ssa->cfg.blocks[b].start, ssa->cfg.blocks[b].start)) {
+				goto jit_failure;
+			}
+		}
 		end = ssa->cfg.blocks[b].start + ssa->cfg.blocks[b].len - 1;
 		for (i = ssa->cfg.blocks[b].start; i <= end; i++) {
 			zend_ssa_op *ssa_op = ssa->ops ? &ssa->ops[i] : NULL;
 			opline = op_array->opcodes + i;
 			if (zend_jit_inc_call_level(opline->opcode)) {
 				call_level++;
+			}
+
+			if (!entry_flush_emitted) {
+				entry_flush_emitted = true;
+				if (!zend_jit_deferred_error_deopt(&ctx, op_array, ssa, b, opline, i)) {
+					goto jit_failure;
+				}
 			}
 
 			if (JIT_G(opt_level) >= ZEND_JIT_LEVEL_INLINE) {

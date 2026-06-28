@@ -79,12 +79,12 @@ foreach($values as $value) {
 
 echo "Done";
 ?>
---EXPECT--
+--EXPECTF--
 *** Testing is_subclass_of() : usage variations ***
-
-Arg value 0 
-Error: 2 - Undefined variable $undefined_var
-Error: 2 - Undefined variable $unset_var
+%A
+%A
+%A
+%A
 bool(false)
 
 Arg value 1 

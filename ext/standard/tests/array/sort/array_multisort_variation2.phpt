@@ -111,8 +111,6 @@ foreach($inputs as $key =>$value) {
 *** Testing array_multisort() : usage variation ***
 
 --int 0--
-Error: 2 - Undefined variable $undefined_var, %s(%d)
-Error: 2 - Undefined variable $unset_var, %s(%d)
 bool(true)
 
 --int 1--

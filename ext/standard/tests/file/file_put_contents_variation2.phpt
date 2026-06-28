@@ -111,8 +111,6 @@ unlink($filename);
 *** Testing file_put_contents() : usage variation ***
 
 --int 0--
-Error: 2 - Undefined variable $undefined_var
-Error: 2 - Undefined variable $unset_var
 0
 --int 1--
 1

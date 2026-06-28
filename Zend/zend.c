@@ -1566,6 +1566,7 @@ static void zend_defer_error(
 	zend_error_info *info = emalloc(sizeof(zend_error_info));
 	info->type = orig_type;
 	info->lineno = error_lineno;
+	info->error_reporting = EG(error_reporting);
 	info->filename = error_filename ? zend_string_copy(error_filename) : NULL;
 	info->message = zend_string_copy(message);
 
@@ -1590,9 +1591,11 @@ ZEND_API void zend_flush_deferred_errors(void)
 	zend_err_buf buf = EG(deferred_errors);
 	memset(&EG(deferred_errors), 0, sizeof(EG(deferred_errors)));
 
+	int orig_error_reporting = EG(error_reporting);
 	for (uint32_t i = 0; i < buf.size; i++) {
 		zend_error_info *info = buf.errors[i];
 		if (!EG(exception)) {
+			EG(error_reporting) = info->error_reporting;
 			zend_call_user_error_handler(info->type, info->filename, info->lineno, info->message);
 		}
 		if (info->filename) {
@@ -1601,6 +1604,7 @@ ZEND_API void zend_flush_deferred_errors(void)
 		zend_string_release(info->message);
 		efree_size(info, sizeof(zend_error_info));
 	}
+	EG(error_reporting) = orig_error_reporting;
 	efree(buf.errors);
 }
 
@@ -1658,6 +1662,7 @@ ZEND_API ZEND_COLD void zend_error_zstr_at(
 		zend_error_info *info = emalloc(sizeof(zend_error_info));
 		info->type = type;
 		info->lineno = error_lineno;
+		info->error_reporting = EG(error_reporting);
 		info->filename = zend_string_copy(error_filename);
 		info->message = zend_string_copy(message);
 		EG(errors).size++;

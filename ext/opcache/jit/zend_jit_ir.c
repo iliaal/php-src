@@ -4337,6 +4337,68 @@ static int zend_jit_store_var(zend_jit_ctx *jit, uint32_t info, int var, int ssa
 	return zend_jit_spill_store(jit, src, dst, info, set_type);
 }
 
+static bool zend_jit_ssa_var_live_at(const zend_ssa *ssa, int v, uint32_t i)
+{
+	int use = ssa->vars[v].use_chain;
+
+	while (use >= 0) {
+		if ((uint32_t)use >= i) {
+			return 1;
+		}
+		use = zend_ssa_next_use(ssa->ops, v, use);
+	}
+	return 0;
+}
+
+static int zend_jit_materialize_live_vars(zend_jit_ctx *jit, const zend_op_array *op_array, zend_ssa *ssa, int b, uint32_t i)
+{
+	int v;
+	zend_ssa_phi *phi;
+
+	if (!jit->ra) {
+		return 1;
+	}
+	phi = ssa->blocks[b].phis;
+	while (phi) {
+		v = phi->ssa_var;
+		if (phi->pi < 0
+		 && jit->ra[v].ref
+		 && !(jit->ra[v].flags & ZREG_LOAD)) {
+			if (!zend_jit_store_var(jit, ssa->var_info[v].type, ssa->vars[v].var, v, 1)) {
+				return 0;
+			}
+		}
+		phi = phi->next;
+	}
+	for (v = 0; v < ssa->vars_count; v++) {
+		if (jit->ra[v].ref
+		 && !(jit->ra[v].flags & ZREG_LOAD)
+		 && ssa->vars[v].definition >= 0
+		 && (uint32_t)ssa->vars[v].definition < i
+		 && zend_jit_ssa_var_live_at(ssa, v, i)) {
+			if (!zend_jit_store_var(jit, ssa->var_info[v].type, ssa->vars[v].var, v, 1)) {
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+static int zend_jit_deferred_error_deopt(zend_jit_ctx *jit, const zend_op_array *op_array, zend_ssa *ssa, int b, const zend_op *opline, uint32_t i)
+{
+	ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
+
+	ir_IF_TRUE_cold(if_deferred);
+	if (!zend_jit_materialize_live_vars(jit, op_array, ssa, b, i)) {
+		return 0;
+	}
+	ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
+	jit_LOAD_IP_ADDR(jit, opline);
+	ir_IJMP(jit_STUB_ADDR(jit, jit_stub_interrupt_handler));
+	ir_IF_FALSE(if_deferred);
+	return 1;
+}
+
 static int zend_jit_store_ref(zend_jit_ctx *jit, uint32_t info, int var, int32_t src, bool set_type)
 {
 	zend_jit_addr dst = ZEND_ADDR_MEM_ZVAL(ZREG_FP, EX_NUM_TO_VAR(var));
@@ -10044,15 +10106,6 @@ static int zend_jit_do_fcall(zend_jit_ctx *jit, const zend_op *opline, const zen
 	const zend_op *prev_opline;
 	ir_ref rx, func_ref = IR_UNUSED, if_user = IR_UNUSED, user_path = IR_UNUSED;
 
-	{
-		ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
-		ir_IF_TRUE_cold(if_deferred);
-		ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
-		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
-		ir_GUARD_NOT(ir_LOAD_A(jit_EG(exception)), jit_STUB_ADDR(jit, jit_stub_exception_handler));
-		ir_MERGE_WITH_EMPTY_FALSE(if_deferred);
-	}
-
 	prev_opline = opline - 1;
 	while (prev_opline->opcode == ZEND_EXT_FCALL_BEGIN || prev_opline->opcode == ZEND_TICKS) {
 		prev_opline--;
@@ -10607,7 +10660,7 @@ static int zend_jit_do_fcall(zend_jit_ctx *jit, const zend_op *opline, const zen
 		 * doing it later once it's popped off. There is code further
 		 * down that handles when there isn't an interrupt function.
 		 */
-		if (zend_interrupt_function) {
+		if (zend_interrupt_function || !trace) {
 			// JIT: if (EG(vm_interrupt)) zend_fcall_interrupt(execute_data);
 			ir_ref if_interrupt = ir_IF(ir_LOAD_U8(jit_EG(vm_interrupt)));
 			ir_IF_TRUE_cold(if_interrupt);
@@ -10728,7 +10781,7 @@ static int zend_jit_do_fcall(zend_jit_ctx *jit, const zend_op *opline, const zen
 		/* If there isn't a zend_interrupt_function, the timeout is
 		 * handled here because it's more efficient.
 		 */
-		if (!zend_interrupt_function) {
+		if (!zend_interrupt_function && trace) {
 			// TODO: Can we avoid checking for interrupts after each call ???
 			if (trace) {
 				int32_t exit_point = zend_jit_trace_get_exit_point(opline + 1, ZEND_JIT_EXIT_TO_VM);
@@ -11098,6 +11151,7 @@ static int zend_jit_leave_func(zend_jit_ctx         *jit,
 	{
 		ir_ref if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
 		ir_IF_TRUE_cold(if_deferred);
+		ir_STORE(jit_EX(opline), jit_IP(jit));
 		ir_STORE(jit_EG(current_execute_data), jit_FP(jit));
 		ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
 		ir_MERGE_WITH_EMPTY_FALSE(if_deferred);
