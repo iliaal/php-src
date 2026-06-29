@@ -1944,6 +1944,32 @@ static void zend_jit_check_timeout(zend_jit_ctx *jit, const zend_op *opline, con
 	}
 }
 
+static void zend_jit_check_loop_timeout(zend_jit_ctx *jit, const zend_op *opline)
+{
+	ir_ref if_interrupt, if_timeout, if_deferred, ride_path, cont_path;
+
+	if_interrupt = ir_IF(ir_LOAD_U8(jit_EG(vm_interrupt)));
+	ir_IF_TRUE_cold(if_interrupt);
+
+	if_timeout = ir_IF(ir_LOAD_U8(jit_EG(timed_out)));
+	ir_IF_TRUE(if_timeout);
+	jit_LOAD_IP_ADDR(jit, opline);
+	ir_IJMP(jit_STUB_ADDR(jit, jit_stub_interrupt_handler));
+	ir_IF_FALSE(if_timeout);
+
+	if_deferred = ir_IF(ir_LOAD_U32(jit_EG(deferred_errors.size)));
+	ir_IF_FALSE(if_deferred);
+	jit_LOAD_IP_ADDR(jit, opline);
+	ir_IJMP(jit_STUB_ADDR(jit, jit_stub_interrupt_handler));
+	ir_IF_TRUE(if_deferred);
+	ride_path = ir_END();
+
+	ir_IF_FALSE(if_interrupt);
+	cont_path = ir_END();
+
+	ir_MERGE_2(ride_path, cont_path);
+}
+
 static void zend_jit_vm_enter(zend_jit_ctx *jit, ir_ref to_opline)
 {
 	// ZEND_VM_ENTER()
