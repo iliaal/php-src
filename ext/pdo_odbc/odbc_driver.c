@@ -601,7 +601,9 @@ static int pdo_odbc_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* {{{ 
 				dsnbuf, sizeof(dsnbuf)-1, &dsnbuflen, SQL_DRIVER_NOPROMPT);
 	}
 	if (!use_direct) {
-		rc = SQLConnect(H->dbc, (SQLCHAR *) dbh->data_source, SQL_NTS, (SQLCHAR *) dbh->username, SQL_NTS, (SQLCHAR *) dbh->password, SQL_NTS);
+		rc = SQLConnect(H->dbc, (SQLCHAR *) dbh->data_source, SQL_NTS,
+			(SQLCHAR *) (dbh->username ? dbh->username : ""), SQL_NTS,
+			(SQLCHAR *) (dbh->password ? dbh->password : ""), SQL_NTS);
 	}
 
 	if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
