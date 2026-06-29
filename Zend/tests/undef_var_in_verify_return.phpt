@@ -19,4 +19,10 @@ Fatal error: Uncaught TypeError: test(): Return value must be of type string, nu
 Stack trace:
 #0 %s(%d): test()
 #1 {main}
+
+Next ErrorException: Undefined variable $test in %s:%d
+Stack trace:
+#0 %s(%d): {closure:%s:%d}(2, 'Undefined varia...', '%s', 8)
+#1 %s(%d): test()
+#2 {main}
   thrown in %s on line %d

@@ -18,7 +18,4 @@ try {
 }
 ?>
 --EXPECTF--
-Fatal error: Uncaught Error: Undefined constant "NOT_REACHED" in %s:%d
-Stack trace:
-#0 {main}
-  thrown in %s on line %d
+Undefined variable $b

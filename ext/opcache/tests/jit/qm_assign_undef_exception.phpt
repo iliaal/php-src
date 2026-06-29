@@ -18,8 +18,4 @@ try {
 }
 ?>
 --EXPECTF--
-Fatal error: Uncaught Error: Undefined constant "X" in %s:%d
-Stack trace:
-#0 %s(%d): test()
-#1 {main}
-  thrown in %s on line %d
+Undefined variable $b

@@ -8227,6 +8227,21 @@ ZEND_VM_HANDLER(149, ZEND_HANDLE_EXCEPTION, ANY, ANY)
 {
 	const zend_op *throw_op = EG(opline_before_exception);
 
+	if (EG(deferred_errors).size) {
+		zend_object *orig_exception = EG(exception);
+		EX(opline) = EG(opline_before_exception);
+		EG(exception) = NULL;
+
+		zend_flush_deferred_errors();
+
+		if (EG(exception)) {
+			zend_exception_set_previous(EG(exception), orig_exception);
+		} else {
+			EG(exception) = orig_exception;
+			EX(opline) = EG(exception_op);
+		}
+	}
+
 	/* Exception was thrown before executing any op */
 	if (UNEXPECTED(!throw_op)) {
 		ZEND_VM_DISPATCH_TO_HELPER(zend_dispatch_try_catch_finally_helper, try_catch_offset, -1, op_num, 0);

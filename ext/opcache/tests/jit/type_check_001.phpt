@@ -21,7 +21,4 @@ try {
 }
 ?>
 --EXPECTF--
-Fatal error: Uncaught Error: Call to undefined function undefined_function() in %s:%d
-Stack trace:
-#0 {main}
-  thrown in %s on line %d
+Exception: Undefined variable $a

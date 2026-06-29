@@ -1588,6 +1588,13 @@ ZEND_API void zend_flush_deferred_errors(void)
 		return;
 	}
 
+	/* A user error handler cannot run while an exception is pending. Keep the
+	 * errors buffered so ZEND_HANDLE_EXCEPTION can flush them with the
+	 * exception cleared, instead of silently dropping them. */
+	if (EG(exception)) {
+		return;
+	}
+
 	zend_err_buf buf = EG(deferred_errors);
 	memset(&EG(deferred_errors), 0, sizeof(EG(deferred_errors)));
 

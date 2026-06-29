@@ -114,18 +114,23 @@ Arg value 0.5
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, float given
 
 Arg value Array
+Error: 2 - Array to string conversion
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, array given
 
 Arg value Array
+Error: 2 - Array to string conversion
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, array given
 
 Arg value Array
+Error: 2 - Array to string conversion
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, array given
 
 Arg value Array
+Error: 2 - Array to string conversion
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, array given
 
 Arg value Array
+Error: 2 - Array to string conversion
 get_parent_class(): Argument #1 ($object_or_class) must be an object or a valid class name, array given
 
 Arg value 

@@ -3403,6 +3403,21 @@ static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV ZEND_HANDLE_EXCEPT
 {
 	const zend_op *throw_op = EG(opline_before_exception);
 
+	if (EG(deferred_errors).size) {
+		zend_object *orig_exception = EG(exception);
+		EX(opline) = EG(opline_before_exception);
+		EG(exception) = NULL;
+
+		zend_flush_deferred_errors();
+
+		if (EG(exception)) {
+			zend_exception_set_previous(EG(exception), orig_exception);
+		} else {
+			EG(exception) = orig_exception;
+			EX(opline) = EG(exception_op);
+		}
+	}
+
 	/* Exception was thrown before executing any op */
 	if (UNEXPECTED(!throw_op)) {
 		ZEND_VM_DISPATCH_TO_HELPER(zend_dispatch_try_catch_finally_helper_SPEC(ZEND_OPCODE_HANDLER_ARGS_PASSTHRU_EX -1, 0));
@@ -56113,6 +56128,21 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV_EX  z
 static ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV ZEND_HANDLE_EXCEPTION_SPEC_TAILCALL_HANDLER(ZEND_OPCODE_HANDLER_ARGS)
 {
 	const zend_op *throw_op = EG(opline_before_exception);
+
+	if (EG(deferred_errors).size) {
+		zend_object *orig_exception = EG(exception);
+		EX(opline) = EG(opline_before_exception);
+		EG(exception) = NULL;
+
+		zend_flush_deferred_errors();
+
+		if (EG(exception)) {
+			zend_exception_set_previous(EG(exception), orig_exception);
+		} else {
+			EG(exception) = orig_exception;
+			EX(opline) = EG(exception_op);
+		}
+	}
 
 	/* Exception was thrown before executing any op */
 	if (UNEXPECTED(!throw_op)) {

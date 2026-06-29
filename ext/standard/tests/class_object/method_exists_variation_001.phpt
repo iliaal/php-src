@@ -85,6 +85,8 @@ echo "Done";
 *** Testing method_exists() : usage variations ***
 
 Arg value 0 
+Error: 2 - Undefined variable $undefined_var
+Error: 2 - Undefined variable $unset_var
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, int given
 
 Arg value 1 
@@ -112,18 +114,23 @@ Arg value 0.5
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, float given
 
 Arg value Array 
+Error: 2 - Array to string conversion
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
 
 Arg value Array 
+Error: 2 - Array to string conversion
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
 
 Arg value Array 
+Error: 2 - Array to string conversion
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
 
 Arg value Array 
+Error: 2 - Array to string conversion
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
 
 Arg value Array 
+Error: 2 - Array to string conversion
 method_exists(): Argument #1 ($object_or_class) must be of type object|string, array given
 
 Arg value  
