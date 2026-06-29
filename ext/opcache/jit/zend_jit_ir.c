@@ -2099,7 +2099,7 @@ static int zend_jit_interrupt_handler_stub(zend_jit_ctx *jit)
 	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_timeout));
 	ir_MERGE_WITH_EMPTY_TRUE(if_timeout);
 
-	ir_CALL(IR_VOID, ir_CONST_FUNC(zend_flush_deferred_errors));
+	ir_CALL_1(IR_VOID, ir_CONST_FUNC(zend_jit_check_deferred_errors), jit_FP(jit));
 	if (zend_interrupt_function) {
 		ir_CALL_1(IR_VOID, ir_CONST_FUNC(zend_interrupt_function), jit_FP(jit));
 	}
@@ -3156,6 +3156,7 @@ static void zend_jit_setup_disasm(void)
 	REGISTER_HELPER(zend_free_extra_named_params);
 	REGISTER_HELPER(zend_jit_free_call_frame);
 	REGISTER_HELPER(zend_jit_exception_in_interrupt_handler_helper);
+	REGISTER_HELPER(zend_jit_check_deferred_errors);
 	REGISTER_HELPER(zend_jit_verify_arg_slow);
 	REGISTER_HELPER(zend_missing_arg_error);
 	REGISTER_HELPER(zend_jit_only_vars_by_reference);

@@ -4062,16 +4062,19 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_FUNC_CCONV 
 	} else {
 		bool entered = false;
 		if (EG(deferred_errors).size) {
-			if (!zend_interrupt_function
-			 && (opline->opcode == ZEND_DO_FCALL
-			  || opline->opcode == ZEND_DO_ICALL
-			  || opline->opcode == ZEND_DO_UCALL
-			  || opline->opcode == ZEND_DO_FCALL_BY_NAME)) {
+			if (EX(call)
+			 || opline->opcode == ZEND_DO_FCALL
+			 || opline->opcode == ZEND_DO_ICALL
+			 || opline->opcode == ZEND_DO_UCALL
+			 || opline->opcode == ZEND_DO_FCALL_BY_NAME) {
 				zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
-				ZEND_VM_CONTINUE();
+				if (!zend_interrupt_function) {
+					ZEND_VM_CONTINUE();
+				}
+			} else {
+				zend_flush_deferred_errors();
+				entered = true;
 			}
-			zend_flush_deferred_errors();
-			entered = true;
 		}
 		if (zend_interrupt_function) {
 			zend_interrupt_function(execute_data);
@@ -56788,16 +56791,19 @@ static zend_never_inline ZEND_OPCODE_HANDLER_RET ZEND_OPCODE_HANDLER_CCONV  zend
 	} else {
 		bool entered = false;
 		if (EG(deferred_errors).size) {
-			if (!zend_interrupt_function
-			 && (opline->opcode == ZEND_DO_FCALL
-			  || opline->opcode == ZEND_DO_ICALL
-			  || opline->opcode == ZEND_DO_UCALL
-			  || opline->opcode == ZEND_DO_FCALL_BY_NAME)) {
+			if (EX(call)
+			 || opline->opcode == ZEND_DO_FCALL
+			 || opline->opcode == ZEND_DO_ICALL
+			 || opline->opcode == ZEND_DO_UCALL
+			 || opline->opcode == ZEND_DO_FCALL_BY_NAME) {
 				zend_atomic_bool_store_ex(&EG(vm_interrupt), true);
-				ZEND_VM_CONTINUE();
+				if (!zend_interrupt_function) {
+					ZEND_VM_CONTINUE();
+				}
+			} else {
+				zend_flush_deferred_errors();
+				entered = true;
 			}
-			zend_flush_deferred_errors();
-			entered = true;
 		}
 		if (zend_interrupt_function) {
 			zend_interrupt_function(execute_data);
