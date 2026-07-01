@@ -1017,6 +1017,27 @@ cleanup_args:
 		EG(jit_trace_num) = orig_jit_trace_num;
 	} else {
 		ZEND_ASSERT(func->type == ZEND_INTERNAL_FUNCTION);
+#ifdef ZEND_CHECK_STACK_LIMIT
+		if (UNEXPECTED(zend_call_stack_overflowed(EG(stack_limit)))) {
+			zend_call_stack_size_error();
+			zend_vm_stack_free_args(call);
+			if (UNEXPECTED(ZEND_CALL_INFO(call) & ZEND_CALL_HAS_EXTRA_NAMED_PARAMS)) {
+				zend_array_release(call->extra_named_params);
+			}
+			EG(fake_scope) = orig_fake_scope;
+			if (UNEXPECTED(ZEND_CALL_INFO(call) & ZEND_CALL_CLOSURE)) {
+				OBJ_RELEASE(ZEND_CLOSURE_OBJECT(func));
+			}
+			zend_vm_stack_free_call_frame(call);
+			if (UNEXPECTED(!EG(current_execute_data))) {
+				zend_throw_exception_internal(NULL);
+			} else if (EG(current_execute_data)->func
+					&& ZEND_USER_CODE(EG(current_execute_data)->func->common.type)) {
+				zend_rethrow_exception(EG(current_execute_data));
+			}
+			return SUCCESS;
+		}
+#endif
 		ZVAL_NULL(fci->retval);
 		call->prev_execute_data = EG(current_execute_data);
 		EG(current_execute_data) = call;
