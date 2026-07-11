@@ -3,6 +3,8 @@ PHP                                                                        NEWS
 ?? ??? ????, PHP 8.6.0alpha2
 
 - Core:
+  . Fixed use-after-free when a destructor bails out (memory_limit, timeout)
+    during zend_hash_clean(), e.g. from session_unset(). (iliaal)
   . Sync Boost.Context assembly with 1.91.0. (kn1g78)
   . Fixed bug GH-22387 (AST pretty-printing drops meaningful parentheses around
     RHS of instanceof). (timwolla)
