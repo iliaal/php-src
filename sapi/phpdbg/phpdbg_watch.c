@@ -1120,6 +1120,32 @@ void phpdbg_check_watchpoint(phpdbg_watchpoint_t *watch) {
 		default:
 			comparePtr = &watch->backup;
 	}
+	if (watch->type == WATCH_ON_BUCKET) {
+		phpdbg_watch_element *first = NULL;
+		ZEND_HASH_MAP_FOREACH_PTR(&watch->elements, first) {
+			break;
+		} ZEND_HASH_FOREACH_END();
+		if (first && first->parent_container && HT_IS_PACKED(first->parent_container)) {
+			zval *new = zend_symtable_find(first->parent_container, first->name_in_parent);
+			if (!new || Z_TYPE_P(new) == IS_UNDEF) {
+				phpdbg_remove_watchpoint(watch);
+				return;
+			}
+			if (new != watch->addr.zv) {
+				phpdbg_remove_watchpoint_btree(watch);
+				phpdbg_deactivate_watchpoint(watch);
+				watch->addr.zv = new;
+				phpdbg_store_watchpoint_btree(watch);
+				phpdbg_activate_watchpoint(watch);
+			}
+			if (!phpdbg_check_watch_diff(WATCH_ON_ZVAL, &watch->backup.bucket.val, watch->addr.ptr)) {
+				phpdbg_watch_backup_data(watch);
+				return;
+			}
+			goto changed;
+		}
+	}
+
 	if (!phpdbg_check_watch_diff(watch->type, comparePtr, watch->addr.ptr)) {
 		return;
 	}
@@ -1162,6 +1188,7 @@ void phpdbg_check_watchpoint(phpdbg_watchpoint_t *watch) {
 		}
 	}
 
+changed:
 	name = phpdbg_watchpoint_change_collision_name(watch);
 
 	if (name) {
