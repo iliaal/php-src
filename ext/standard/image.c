@@ -203,7 +203,11 @@ static struct gfxinfo *php_handle_swc(php_stream * stream)
 		*/
 
 		do {
-			szlength = ZSTR_LEN(bufz) * (1<<factor++);
+			if (ZSTR_LEN(bufz) > (16 * 1024 * 1024) / (1u << factor)) {
+				status = Z_MEM_ERROR;
+				break;
+			}
+			szlength = ZSTR_LEN(bufz) * (1u << factor++);
 			buf = erealloc(buf, szlength);
 			status = uncompress(buf, &szlength, (unsigned char *) ZSTR_VAL(bufz), ZSTR_LEN(bufz));
 		} while ((status==Z_BUF_ERROR)&&(factor<maxfactor));
