@@ -240,6 +240,7 @@ static unsigned int php_sapi_filter_init(void)
 static void php_zval_filter(zval *value, zend_long filter, zend_long flags, zval *options, char* charset) /* {{{ */
 {
 	filter_list_entry  filter_func;
+	zend_result result = FAILURE;
 
 	filter_func = php_find_filter(filter);
 
@@ -284,7 +285,7 @@ static void php_zval_filter(zval *value, zend_long filter, zend_long flags, zval
 		copy_for_throwing = zend_string_copy(Z_STR_P(value));
 	}
 
-	zend_result result = filter_func.function(value, flags, options, charset);
+	result = filter_func.function(value, flags, options, charset);
 
 	if (flags & FILTER_THROW_ON_FAILURE) {
 		ZEND_ASSERT(copy_for_throwing != NULL);
@@ -304,9 +305,7 @@ static void php_zval_filter(zval *value, zend_long filter, zend_long flags, zval
 	}
 
 handle_default:
-	if (options && Z_TYPE_P(options) == IS_ARRAY &&
-		((flags & FILTER_NULL_ON_FAILURE && Z_TYPE_P(value) == IS_NULL) ||
-		(!(flags & FILTER_NULL_ON_FAILURE) && Z_TYPE_P(value) == IS_FALSE))) {
+	if (options && Z_TYPE_P(options) == IS_ARRAY && result == FAILURE) {
 		zval *tmp;
 		if ((tmp = zend_hash_str_find(Z_ARRVAL_P(options), "default", sizeof("default") - 1)) != NULL) {
 			ZVAL_COPY(value, tmp);

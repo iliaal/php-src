@@ -38,6 +38,13 @@ PHP 8.6 UPGRADE NOTES
     the integer index is greater than INT_MAX instead of overflowing to a
     smaller index.
 
+- Filter:
+  . The "default" option is now applied only when the filter actually fails,
+    matching FILTER_THROW_ON_FAILURE. Previously it was applied whenever the
+    filtered value was false, so a successful FILTER_VALIDATE_BOOL result of
+    false was replaced by the default. Use FILTER_NULL_ON_FAILURE if you need
+    to distinguish a valid false from a failure without a default.
+
 - GD:
   . imagesetstyle(), imagefilter() and imagecrop() filter their array arguments
     types / values and raise a TypeError / ValueError accordingly.

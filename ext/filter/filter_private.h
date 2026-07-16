@@ -95,23 +95,19 @@
 
 /* When using FILTER_THROW_ON_FAILURE, we can't actually throw the error here
  * because we don't have access to the name of the filter. Returning FAILURE
- * from the filter handler indicates that validation failed *and* an exception
- * should thus be thrown. */
+ * from the filter handler indicates that validation failed; php_zval_filter()
+ * decides whether that means throwing, applying options.default, or neither. */
 #define RETURN_VALIDATION_FAILED \
 	if (EG(exception)) { \
 		return SUCCESS; \
-	} else if (flags & FILTER_THROW_ON_FAILURE) { \
-		zval_ptr_dtor(value); \
-		ZVAL_NULL(value); \
-		return FAILURE; \
-	} else if (flags & FILTER_NULL_ON_FAILURE) { \
-		zval_ptr_dtor(value); \
+	} \
+	zval_ptr_dtor(value); \
+	if (flags & (FILTER_THROW_ON_FAILURE | FILTER_NULL_ON_FAILURE)) { \
 		ZVAL_NULL(value); \
 	} else { \
-		zval_ptr_dtor(value); \
 		ZVAL_FALSE(value); \
-	}	\
-	return SUCCESS;	\
+	} \
+	return FAILURE;	\
 
 #define PHP_FILTER_TRIM_DEFAULT(p, len) PHP_FILTER_TRIM_DEFAULT_EX(p, len, 1);
 
