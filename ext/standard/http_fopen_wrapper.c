@@ -81,6 +81,7 @@
 #define HTTP_WRAPPER_HEADER_INIT    1
 #define HTTP_WRAPPER_REDIRECTED     2
 #define HTTP_WRAPPER_KEEP_METHOD    4
+#define HTTP_WRAPPER_CROSS_HOST     8
 
 static inline void strip_header(char *header_bag, char *lc_header_bag,
 		const char *lc_header_name)
@@ -700,6 +701,10 @@ finish:
 				strip_header(user_headers, t, "content-length:");
 				strip_header(user_headers, t, "content-type:");
 			}
+			if (flags & HTTP_WRAPPER_CROSS_HOST) {
+				strip_header(user_headers, t, "authorization:");
+				strip_header(user_headers, t, "cookie:");
+			}
 
 			if (check_has_header(t, "user-agent:")) {
 				have_header |= HTTP_HEADER_USER_AGENT;
@@ -1100,12 +1105,30 @@ finish:
 				header_info.location = NULL;
 			}
 
-			php_url_free(resource);
-			/* check for invalid redirection URLs */
-			if ((resource = php_url_parse(new_path)) == NULL) {
-				php_stream_wrapper_log_error(wrapper, options, "Invalid redirect URL! %s", new_path);
-				efree(new_path);
-				goto out;
+			{
+				zend_string *prev_host = resource->host ? zend_string_copy(resource->host) : NULL;
+				unsigned short prev_port = resource->port;
+				php_url_free(resource);
+				resource = NULL;
+				/* check for invalid redirection URLs */
+				if ((resource = php_url_parse(new_path)) == NULL) {
+					if (prev_host) {
+						zend_string_release_ex(prev_host, 0);
+					}
+					php_stream_wrapper_log_error(wrapper, options, "Invalid redirect URL! %s", new_path);
+					efree(new_path);
+					goto out;
+				}
+
+
+			int new_flags = HTTP_WRAPPER_REDIRECTED;
+			if (prev_host && resource->host &&
+			    (!zend_string_equals_ci(prev_host, resource->host) || prev_port != resource->port)) {
+				new_flags |= HTTP_WRAPPER_CROSS_HOST;
+			}
+			if (prev_host) {
+				zend_string_release_ex(prev_host, 0);
+				prev_host = NULL;
 			}
 
 #define CHECK_FOR_CNTRL_CHARS(val) { \
@@ -1129,7 +1152,7 @@ finish:
 				CHECK_FOR_CNTRL_CHARS(resource->pass);
 				CHECK_FOR_CNTRL_CHARS(resource->path);
 			}
-			int new_flags = HTTP_WRAPPER_REDIRECTED;
+
 			if (response_code == 307 || response_code == 308) {
 				/* RFC 7538 specifies that status code 308 does not allow changing the request method from POST to GET.
 				 * RFC 7231 does the same for status code 307.
@@ -1140,6 +1163,7 @@ finish:
 				wrapper, new_path, mode, options, opened_path, context,
 				--redirect_max, new_flags, response_header STREAMS_CC);
 			efree(new_path);
+			}
 		} else {
 			php_stream_wrapper_log_error(wrapper, options, "HTTP request failed! %s", tmp_line);
 		}
