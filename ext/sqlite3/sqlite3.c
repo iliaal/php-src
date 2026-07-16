@@ -473,6 +473,11 @@ PHP_METHOD(SQLite3, escapeString)
 		RETURN_THROWS();
 	}
 
+	if (UNEXPECTED(zend_str_has_nul_byte(sql))) {
+		zend_argument_value_error(1, "must not contain null bytes");
+		RETURN_THROWS();
+	}
+
 	if (ZSTR_LEN(sql)) {
 		ret = sqlite3_mprintf("%q", ZSTR_VAL(sql));
 		if (ret) {
