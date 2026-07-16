@@ -41,6 +41,10 @@
 #include <netinet/in.h>
 #endif
 
+#ifndef PHP_PACK_MAX_OUTPUT
+# define PHP_PACK_MAX_OUTPUT (32 * 1024 * 1024)
+#endif
+
 #define INC_OUTPUTPOS(a,b) \
 	if ((a) < 0 || ((INT_MAX - outputpos)/((int)b)) < (a)) { \
 		efree(formatcodes);	\
@@ -455,6 +459,13 @@ too_few_args:
 		if (outputsize < outputpos) {
 			outputsize = outputpos;
 		}
+	}
+
+	if (outputsize > PHP_PACK_MAX_OUTPUT) {
+		efree(formatcodes);
+		efree(formatargs);
+		zend_value_error("pack(): string is too large");
+		RETURN_THROWS();
 	}
 
 	output = zend_string_alloc(outputsize, 0);
