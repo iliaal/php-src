@@ -1384,7 +1384,28 @@ object ":" uiv ":" ["]	{
 		goto fail;
 	}
 
+	zend_string *lc_name = zend_string_tolower(enum_name);
+	if (!unserialize_allowed_class(lc_name, var_hash)) {
+		zend_string_release_ex(lc_name, 0);
+		zend_string_release_ex(case_name, 0);
+		YYCURSOR += 2;
+		*p = YYCURSOR;
+		if (object_init_ex(rval, PHP_IC_ENTRY) == FAILURE) {
+			zend_string_release_ex(enum_name, 0);
+			return 0;
+		}
+		php_store_class_name(rval, enum_name);
+		zend_string_release_ex(enum_name, 0);
+		return 1;
+	}
+	zend_string_release_ex(lc_name, 0);
+
+	BG(serialize_lock)++;
 	zend_class_entry *ce = zend_lookup_class(enum_name);
+	BG(serialize_lock)--;
+	if (EG(exception)) {
+		goto fail;
+	}
 	if (!ce) {
 		php_error_docref(NULL, E_WARNING, "Class '%s' not found", ZSTR_VAL(enum_name));
 		goto fail;
