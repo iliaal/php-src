@@ -191,8 +191,15 @@ PHP_FUNCTION(ftp_ssl_connect)
 		RETURN_THROWS();
 	}
 
+	const uint64_t timeoutmax = (uint64_t)((double) PHP_TIMEOUT_ULL_MAX / 1000000.0);
+
 	if (timeout_sec <= 0) {
 		zend_argument_value_error(3, "must be greater than 0");
+		RETURN_THROWS();
+	}
+
+	if (timeout_sec >= timeoutmax) {
+		zend_argument_value_error(3, "must be less than " ZEND_ULONG_FMT, timeoutmax);
 		RETURN_THROWS();
 	}
 
@@ -1259,6 +1266,7 @@ PHP_FUNCTION(ftp_set_option)
 	zval		*z_ftp, *z_value;
 	zend_long		option;
 	ftpbuf_t	*ftp;
+	const uint64_t timeoutmax = (uint64_t)((double) PHP_TIMEOUT_ULL_MAX / 1000000.0);
 
 	if (zend_parse_parameters(ZEND_NUM_ARGS(), "Olz", &z_ftp, php_ftp_ce, &option, &z_value) == FAILURE) {
 		RETURN_THROWS();
@@ -1273,6 +1281,10 @@ PHP_FUNCTION(ftp_set_option)
 			}
 			if (Z_LVAL_P(z_value) <= 0) {
 				zend_argument_value_error(3, "must be greater than 0 for the FTP_TIMEOUT_SEC option");
+				RETURN_THROWS();
+			}
+			if ((uint64_t) Z_LVAL_P(z_value) >= timeoutmax) {
+				zend_argument_value_error(3, "must be less than " ZEND_ULONG_FMT " for the FTP_TIMEOUT_SEC option", timeoutmax);
 				RETURN_THROWS();
 			}
 			ftp->timeout_sec = Z_LVAL_P(z_value);
