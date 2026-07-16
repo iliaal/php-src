@@ -2537,6 +2537,10 @@ static zval *to_zval_array(zval *ret, encodeTypePtr type, xmlNodePtr data)
 	ZVAL_NULL(ret);
 	FIND_XML_NULL(data, ret);
 
+	if (soap_check_xml_ref(ret, data)) {
+		return ret;
+	}
+
 	if (data &&
 	    (attr = get_attribute(data->properties,"arrayType")) &&
 	    attr->children && attr->children->content) {
@@ -2672,6 +2676,9 @@ static zval *to_zval_array(zval *ret, encodeTypePtr type, xmlNodePtr data)
 	}
 
 	array_init(ret);
+	zend_hash_real_init_packed(Z_ARRVAL_P(ret));
+	HT_ALLOW_COW_VIOLATION(Z_ARRVAL_P(ret));
+	soap_add_xml_ref(ret, data);
 	trav = data->children;
 	while (trav) {
 		if (trav->type == XML_ELEMENT_NODE) {
@@ -2799,8 +2806,15 @@ static zval *to_zval_map(zval *ret, encodeTypePtr type, xmlNodePtr data)
 	ZVAL_NULL(ret);
 	FIND_XML_NULL(data, ret);
 
+	if (soap_check_xml_ref(ret, data)) {
+		return ret;
+	}
+
 	if (data && data->children) {
 		array_init(ret);
+		zend_hash_real_init_mixed(Z_ARRVAL_P(ret));
+		HT_ALLOW_COW_VIOLATION(Z_ARRVAL_P(ret));
+		soap_add_xml_ref(ret, data);
 		trav = data->children;
 
 		trav = data->children;
