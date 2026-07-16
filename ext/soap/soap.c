@@ -3460,13 +3460,15 @@ ignore_header:
 		}
 	}
 
-	if (function && function->binding && function->binding->bindingType == BINDING_SOAP) {
-		sdlSoapBindingFunctionPtr fnb = (sdlSoapBindingFunctionPtr)function->bindingAttributes;
-		if (fnb->style == SOAP_RPC) {
+	if (func != NULL) {
+		if (function && function->binding && function->binding->bindingType == BINDING_SOAP) {
+			sdlSoapBindingFunctionPtr fnb = (sdlSoapBindingFunctionPtr)function->bindingAttributes;
+			if (fnb->style == SOAP_RPC) {
+				func = func->children;
+			}
+		} else {
 			func = func->children;
 		}
-	} else {
-		func = func->children;
 	}
 	deserialize_parameters(func, function, num_params, parameters);
 
