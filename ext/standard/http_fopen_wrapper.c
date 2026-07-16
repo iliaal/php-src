@@ -82,6 +82,20 @@
 #define HTTP_WRAPPER_REDIRECTED     2
 #define HTTP_WRAPPER_KEEP_METHOD    4
 
+static bool php_http_valid_from_address(const char *from)
+{
+	const unsigned char *s = (const unsigned char *) from;
+
+	while (*s) {
+		if (iscntrl(*s)) {
+			return false;
+		}
+		s++;
+	}
+
+	return true;
+}
+
 static inline void strip_header(char *header_bag, char *lc_header_bag,
 		const char *lc_header_name)
 {
@@ -783,9 +797,13 @@ finish:
 
 	/* if the user has configured who they are, send a From: line */
 	if (!(have_header & HTTP_HEADER_FROM) && FG(from_address)) {
-		smart_str_appends(&req_buf, "From: ");
-		smart_str_appends(&req_buf, FG(from_address));
-		smart_str_appends(&req_buf, "\r\n");
+		if (php_http_valid_from_address(FG(from_address))) {
+			smart_str_appends(&req_buf, "From: ");
+			smart_str_appends(&req_buf, FG(from_address));
+			smart_str_appends(&req_buf, "\r\n");
+		} else {
+			php_error_docref(NULL, E_WARNING, "Cannot construct From header");
+		}
 	}
 
 	/* Send Host: header so name-based virtual hosts work */
