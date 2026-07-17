@@ -1151,9 +1151,9 @@ static bool zend_check_intersection_type_from_list(
 	return true;
 }
 
-static zend_always_inline bool zend_check_type_slow(
+static zend_always_inline bool zend_check_type_slow_ex(
 		const zend_type *type, zval *arg, const zend_reference *ref,
-		bool is_return_type, bool is_internal)
+		bool is_return_type, bool is_internal, bool strict)
 {
 	if (ZEND_TYPE_IS_COMPLEX(*type) && EXPECTED(Z_TYPE_P(arg) == IS_OBJECT)) {
 		zend_class_entry *ce;
@@ -1206,12 +1206,18 @@ static zend_always_inline bool zend_check_type_slow(
 		return 0;
 	}
 
-	return zend_verify_scalar_type_hint(type_mask, arg,
-		is_return_type ? ZEND_RET_USES_STRICT_TYPES() : ZEND_ARG_USES_STRICT_TYPES(),
-		is_internal);
+	return zend_verify_scalar_type_hint(type_mask, arg, strict, is_internal);
 
 	/* Special handling for IS_VOID is not necessary (for return types),
 	 * because this case is already checked at compile-time. */
+}
+
+static zend_always_inline bool zend_check_type_slow(
+		const zend_type *type, zval *arg, const zend_reference *ref,
+		bool is_return_type, bool is_internal)
+{
+	return zend_check_type_slow_ex(type, arg, ref, is_return_type, is_internal,
+		is_return_type ? ZEND_RET_USES_STRICT_TYPES() : ZEND_ARG_USES_STRICT_TYPES());
 }
 
 static zend_always_inline bool zend_check_type(
@@ -1234,9 +1240,21 @@ static zend_always_inline bool zend_check_type(
 
 /* We can not expose zend_check_type() directly because it's inline and uses static functions */
 ZEND_API bool zend_check_type_ex(
-		const zend_type *type, zval *arg, bool is_return_type, bool is_internal)
+		const zend_type *type, zval *arg, bool is_return_type, bool is_internal, bool strict)
 {
-	return zend_check_type(type, arg, is_return_type, is_internal);
+	const zend_reference *ref = NULL;
+	ZEND_ASSERT(ZEND_TYPE_IS_SET(*type));
+
+	if (UNEXPECTED(Z_ISREF_P(arg))) {
+		ref = Z_REF_P(arg);
+		arg = Z_REFVAL_P(arg);
+	}
+
+	if (EXPECTED(ZEND_TYPE_CONTAINS_CODE(*type, Z_TYPE_P(arg)))) {
+		return 1;
+	}
+
+	return zend_check_type_slow_ex(type, arg, ref, is_return_type, is_internal, strict);
 }
 
 ZEND_API bool zend_check_user_type_slow(
