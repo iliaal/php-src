@@ -569,9 +569,9 @@ static zend_ast *zp_compile_forwarding_call(
 	}
 
 	/* Generate positional arguments */
+	bool pass_by_name = false;
 	for (uint32_t offset = 0; offset < argc; offset++) {
 		if (Z_ISUNDEF(argv[offset])) {
-			/* Argument was not passed. Pass its default value. */
 			if (offset < function->common.required_num_args) {
 				/* Required param was not passed. This can happen due to named
 				 * args. Using the same exception CE and message as
@@ -579,22 +579,26 @@ static zend_ast *zp_compile_forwarding_call(
 				zend_argument_error_ex(zend_ce_argument_count_error, function, offset + 1, "not passed");
 				goto error;
 			}
-			zval default_value;
-			if (zp_get_param_default_value(&default_value, function, offset) == FAILURE) {
-				ZEND_ASSERT(EG(exception));
-				goto error;
-			}
-			zend_ast *default_value_ast;
-			if (Z_TYPE(default_value) == IS_CONSTANT_AST) {
-				/* Must dup AST because we are going to destroy it */
-				default_value_ast = zend_ast_dup(Z_ASTVAL(default_value));
+			if (function->type == ZEND_USER_FUNCTION) {
+				pass_by_name = true;
 			} else {
-				default_value_ast = zend_ast_create_zval(&default_value);
+				zval default_value;
+				if (zp_get_param_default_value(&default_value, function, offset) == FAILURE) {
+					ZEND_ASSERT(EG(exception));
+					goto error;
+				}
+				args_ast = zend_ast_list_add(args_ast, zend_ast_create_zval(&default_value));
 			}
-			args_ast = zend_ast_list_add(args_ast, default_value_ast);
 		} else {
-			args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_VAR,
-						zend_ast_create_zval_from_str(zend_string_copy(var_names->params[offset]))));
+			zend_ast *value_ast = zend_ast_create(ZEND_AST_VAR,
+						zend_ast_create_zval_from_str(zend_string_copy(var_names->params[offset])));
+			if (pass_by_name) {
+				args_ast = zend_ast_list_add(args_ast, zend_ast_create(ZEND_AST_NAMED_ARG,
+							zend_ast_create_zval_from_str(zp_get_func_param_name(function, offset)),
+							value_ast));
+			} else {
+				args_ast = zend_ast_list_add(args_ast, value_ast);
+			}
 		}
 	}
 	/* Use unpacking to pass extra named params */
