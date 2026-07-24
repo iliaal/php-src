@@ -4179,6 +4179,9 @@ ZEND_API bool zend_is_callable_at_frame(
 	bool ret;
 	zend_fcall_info_cache fcc_local;
 	bool strict_class = 0;
+	zval callable_copy;
+
+	ZVAL_UNDEF(&callable_copy);
 
 	if (fcc == NULL) {
 		fcc = &fcc_local;
@@ -4206,10 +4209,16 @@ again:
 				return 1;
 			}
 
+			ZVAL_COPY(&callable_copy, callable);
+			callable = &callable_copy;
+
 check_func:
 			ret = zend_is_callable_check_func(callable, frame, fcc, strict_class, error, check_flags & IS_CALLABLE_SUPPRESS_DEPRECATIONS);
 			if (fcc == &fcc_local) {
 				zend_release_fcall_info_cache(fcc);
+			}
+			if (!Z_ISUNDEF(callable_copy)) {
+				zval_ptr_dtor(&callable_copy);
 			}
 			return ret;
 
@@ -4244,7 +4253,11 @@ check_func:
 						return 1;
 					}
 
+					ZVAL_COPY(&callable_copy, method);
+					callable = &callable_copy;
+
 					if (!zend_is_callable_check_class(Z_STR_P(obj), get_scope(frame), frame, fcc, &strict_class, error, check_flags & IS_CALLABLE_SUPPRESS_DEPRECATIONS)) {
+						zval_ptr_dtor(&callable_copy);
 						return 0;
 					}
 				} else {
@@ -4256,9 +4269,11 @@ check_func:
 						fcc->called_scope = fcc->calling_scope;
 						return 1;
 					}
+
+					ZVAL_COPY(&callable_copy, method);
+					callable = &callable_copy;
 				}
 
-				callable = method;
 				goto check_func;
 			}
 			return 0;

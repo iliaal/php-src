@@ -7408,9 +7408,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CONS
 	void *object_or_called_scope;
 	zend_execute_data *call;
 	uint32_t call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_DYNAMIC;
+	zval held_callable;
 
 	SAVE_OPLINE();
 	function_name = RT_CONSTANT(opline, opline->op2);
+	ZVAL_UNDEF(&held_callable);
+	ZVAL_DEREF(function_name);
+	if (UNEXPECTED(Z_TYPE_P(function_name) == IS_ARRAY)) {
+		ZVAL_COPY(&held_callable, function_name);
+		function_name = &held_callable;
+	}
 	if (zend_is_callable_ex(function_name, NULL, 0, NULL, &fcc, &error)) {
 		ZEND_ASSERT(!error);
 
@@ -7419,6 +7426,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CONS
 		 * For the CONST and CV case we reuse the same exception block below
 		 * to make sure we don't increase VM size too much. */
 		if (!(IS_CONST & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
+			if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+				zval_ptr_dtor(&held_callable);
+			}
 
 			HANDLE_EXCEPTION();
 		}
@@ -7442,6 +7452,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CONS
 			call_info |= ZEND_CALL_RELEASE_THIS | ZEND_CALL_HAS_THIS;
 		}
 
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
+
 		if ((IS_CONST & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
 			if (call_info & ZEND_CALL_CLOSURE) {
 				zend_object_release(ZEND_CLOSURE_OBJECT(func));
@@ -7455,6 +7469,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CONS
 			init_func_run_time_cache(&func->op_array);
 		}
 	} else {
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
 		zend_type_error("%s(): Argument #1 ($callback) must be a valid callback, %s", Z_STRVAL_P(RT_CONSTANT(opline, opline->op1)), error);
 		efree(error);
 
@@ -9997,9 +10014,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_TMPV
 	void *object_or_called_scope;
 	zend_execute_data *call;
 	uint32_t call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_DYNAMIC;
+	zval held_callable;
 
 	SAVE_OPLINE();
 	function_name = _get_zval_ptr_var(opline->op2.var EXECUTE_DATA_CC);
+	ZVAL_UNDEF(&held_callable);
+	ZVAL_DEREF(function_name);
+	if (UNEXPECTED(Z_TYPE_P(function_name) == IS_ARRAY)) {
+		ZVAL_COPY(&held_callable, function_name);
+		function_name = &held_callable;
+	}
 	if (zend_is_callable_ex(function_name, NULL, 0, NULL, &fcc, &error)) {
 		ZEND_ASSERT(!error);
 
@@ -10008,6 +10032,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_TMPV
 		 * For the CONST and CV case we reuse the same exception block below
 		 * to make sure we don't increase VM size too much. */
 		if (!((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
+			if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+				zval_ptr_dtor(&held_callable);
+			}
 			zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
 			HANDLE_EXCEPTION();
 		}
@@ -10031,6 +10058,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_TMPV
 			call_info |= ZEND_CALL_RELEASE_THIS | ZEND_CALL_HAS_THIS;
 		}
 
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
 		zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
 		if (((IS_TMP_VAR|IS_VAR) & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
 			if (call_info & ZEND_CALL_CLOSURE) {
@@ -10045,6 +10075,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_TMPV
 			init_func_run_time_cache(&func->op_array);
 		}
 	} else {
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
 		zend_type_error("%s(): Argument #1 ($callback) must be a valid callback, %s", Z_STRVAL_P(RT_CONSTANT(opline, opline->op1)), error);
 		efree(error);
 		zval_ptr_dtor_nogc(EX_VAR(opline->op2.var));
@@ -12496,9 +12529,16 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CV_H
 	void *object_or_called_scope;
 	zend_execute_data *call;
 	uint32_t call_info = ZEND_CALL_NESTED_FUNCTION | ZEND_CALL_DYNAMIC;
+	zval held_callable;
 
 	SAVE_OPLINE();
 	function_name = _get_zval_ptr_cv_BP_VAR_R(opline->op2.var EXECUTE_DATA_CC);
+	ZVAL_UNDEF(&held_callable);
+	ZVAL_DEREF(function_name);
+	if (UNEXPECTED(Z_TYPE_P(function_name) == IS_ARRAY)) {
+		ZVAL_COPY(&held_callable, function_name);
+		function_name = &held_callable;
+	}
 	if (zend_is_callable_ex(function_name, NULL, 0, NULL, &fcc, &error)) {
 		ZEND_ASSERT(!error);
 
@@ -12507,6 +12547,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CV_H
 		 * For the CONST and CV case we reuse the same exception block below
 		 * to make sure we don't increase VM size too much. */
 		if (!(IS_CV & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
+			if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+				zval_ptr_dtor(&held_callable);
+			}
 
 			HANDLE_EXCEPTION();
 		}
@@ -12530,6 +12573,10 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CV_H
 			call_info |= ZEND_CALL_RELEASE_THIS | ZEND_CALL_HAS_THIS;
 		}
 
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
+
 		if ((IS_CV & (IS_TMP_VAR|IS_VAR)) && UNEXPECTED(EG(exception))) {
 			if (call_info & ZEND_CALL_CLOSURE) {
 				zend_object_release(ZEND_CLOSURE_OBJECT(func));
@@ -12543,6 +12590,9 @@ static ZEND_OPCODE_HANDLER_RET ZEND_FASTCALL ZEND_INIT_USER_CALL_SPEC_CONST_CV_H
 			init_func_run_time_cache(&func->op_array);
 		}
 	} else {
+		if (UNEXPECTED(!Z_ISUNDEF(held_callable))) {
+			zval_ptr_dtor(&held_callable);
+		}
 		zend_type_error("%s(): Argument #1 ($callback) must be a valid callback, %s", Z_STRVAL_P(RT_CONSTANT(opline, opline->op1)), error);
 		efree(error);
 
