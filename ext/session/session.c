@@ -145,6 +145,12 @@ static void php_rshutdown_session_globals(void) /* {{{ */
 			PS(mod)->s_close(&PS(mod_data));
 		} zend_end_try();
 	}
+	if (PS(mod_user_is_open) && PS(default_mod) && PS(mod_data)) {
+		PS(mod_user_is_open) = 0;
+		zend_try {
+			PS(default_mod)->s_close(&PS(mod_data));
+		} zend_end_try();
+	}
 	if (PS(id)) {
 		zend_string_release_ex(PS(id), 0);
 		PS(id) = NULL;

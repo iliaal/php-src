@@ -32,6 +32,8 @@ Warning: session_destroy(): Cannot call session save handler in a recursive mann
 
 Warning: session_destroy(): Session object destruction failed in %s on line %d
 
+Warning: session_destroy(): Cannot call session save handler in a recursive manner in %s on line %d
+
 Warning: session_regenerate_id(): Session ID cannot be regenerated because the save handler closed the session in %s on line %d
 bool(false)
 bool(true)
