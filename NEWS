@@ -25,6 +25,12 @@ PHP                                                                        NEWS
     is_writable(), is_readable(), is_executable(), is_file(), is_dir(),
     is_link(), file_exists(), lstat(), stat(). (Girgias)
 
+- Sysvmsg:
+  . Fixed msg_queue_exists() creating and leaking a message queue when passed
+    IPC_PRIVATE. (iliaal)
+  . Fixed msg_queue_exists() and msg_get_queue() to throw a ValueError for keys
+    outside the key_t range. (iliaal)
+
 30 Jul 2026, PHP 8.6.0alpha3
 
 - Core:
