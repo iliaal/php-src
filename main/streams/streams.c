@@ -2141,7 +2141,6 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 			php_stream_display_wrapper_name_errors(wrapper_name, context, PHP_STREAM_EC(OpenFailed),
 					"Failed to open stream");
 		}
-		php_stream_tidy_wrapper_name_error_log(wrapper_name);
 		goto cleanup;
 	}
 
@@ -2213,6 +2212,7 @@ PHPAPI php_stream *_php_stream_open_wrapper_ex(const char *path, const char *mod
 	}
 
 cleanup:
+	php_stream_tidy_wrapper_name_error_log(wrapper_name);
 	pefree(wrapper_name, persistent);
 cleanup_no_wrapper_name:
 	if (resolved_path) {
