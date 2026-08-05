@@ -376,6 +376,10 @@ PDO_API void php_pdo_internal_construct_driver(INTERNAL_FUNCTION_PARAMETERS, zen
 		dbh = Z_PDO_DBH_P(new_zval_object);
 	} else {
 		dbh = php_pdo_dbh_fetch_inner(current_object);
+		if (dbh->driver) {
+			zend_throw_error(NULL, "PDO object is already initialized");
+			RETURN_THROWS();
+		}
 	}
 
 	/* is this supposed to be a persistent connection ? */
