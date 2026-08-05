@@ -2,6 +2,10 @@ PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? ????, PHP 8.4.25
 
+- PDO:
+  . Fixed pdo_raise_impl_error() emitting warnings under ERRMODE_SILENT.
+    (iliaal)
+
 - Date:
   . Fixed leak on double DatePeriod::__construct() call. (ilutov)
 
