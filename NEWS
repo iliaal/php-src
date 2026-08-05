@@ -2,6 +2,10 @@ PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? ????, PHP 8.4.25
 
+- Session:
+  . Fixed session.use_strict_mode being a no-op for the built-in
+    SessionHandler. (iliaal)
+
 - Date:
   . Fixed leak on double DatePeriod::__construct() call. (ilutov)
 
