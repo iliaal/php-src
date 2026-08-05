@@ -2,6 +2,10 @@ PHP                                                                        NEWS
 |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 ?? ??? ????, PHP 8.6.0beta1
 
+- Session:
+  . Fixed session encode failures not closing save handlers, which could leave
+    session file locks held. (iliaal)
+
 - Core:
   . Changed run-tests.php to run test subprocesses without a shell where
     possible. (NickSdot)

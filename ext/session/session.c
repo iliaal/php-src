@@ -44,6 +44,7 @@
 #include "ext/standard/head.h"
 #include "ext/random/php_random.h"
 #include "ext/random/php_random_csprng.h"
+#include "zend_exceptions.h"
 
 #include "mod_files.h"
 #include "mod_user.h"
@@ -511,6 +512,9 @@ static zend_result php_session_initialize(void)
 static void php_session_save_current_state(bool write)
 {
 	zend_result ret = FAILURE;
+	bool encode_failed = false;
+	zend_object *saved_exception = NULL;
+	const zend_op *saved_opline_before_exception = NULL;
 
 	if (write) {
 		IF_SESSION_VARS() {
@@ -519,24 +523,39 @@ static void php_session_save_current_state(bool write)
 				zend_string *val = php_session_encode();
 				/* Not being able to encode the session data means there is some kind of issue that prevents a write
 				 * (e.g. a key containing the '|' character with the default serialization) */
-				if (UNEXPECTED(val == NULL)) {
-					return;
-				}
-
-				if (PS(lazy_write) && PS(session_vars)
-					&& PS(mod)->s_update_timestamp
-					&& PS(mod)->s_update_timestamp != php_session_update_timestamp
-					&& zend_string_equals(val, PS(session_vars))
-				) {
-					ret = PS(mod)->s_update_timestamp(&PS(mod_data), PS(id), val, PS(gc_maxlifetime));
-					handler_function = &PS(mod_user_names).ps_update_timestamp;
+				if (UNEXPECTED(EG(exception))) {
+					encode_failed = true;
+					if (EG(current_execute_data)) {
+						if (EG(current_execute_data)->func
+						 && ZEND_USER_CODE(EG(current_execute_data)->func->common.type)) {
+							zend_rethrow_exception(EG(current_execute_data));
+						}
+						EG(current_execute_data)->opline = EG(opline_before_exception);
+						saved_opline_before_exception = EG(opline_before_exception);
+					}
+					saved_exception = EG(exception);
+					EG(exception) = NULL;
+					if (val) {
+						zend_string_release_ex(val, false);
+					}
+				} else if (EXPECTED(val != NULL)) {
+					if (PS(lazy_write) && PS(session_vars)
+						&& PS(mod)->s_update_timestamp
+						&& PS(mod)->s_update_timestamp != php_session_update_timestamp
+						&& zend_string_equals(val, PS(session_vars))
+					) {
+						ret = PS(mod)->s_update_timestamp(&PS(mod_data), PS(id), val, PS(gc_maxlifetime));
+						handler_function = &PS(mod_user_names).ps_update_timestamp;
+					} else {
+						ret = PS(mod)->s_write(&PS(mod_data), PS(id), val, PS(gc_maxlifetime));
+					}
+					zend_string_release_ex(val, false);
 				} else {
-					ret = PS(mod)->s_write(&PS(mod_data), PS(id), val, PS(gc_maxlifetime));
+					encode_failed = true;
 				}
-				zend_string_release_ex(val, false);
 			}
 
-			if ((ret == FAILURE) && !EG(exception)) {
+			if ((ret == FAILURE) && !EG(exception) && !encode_failed) {
 				if (!PS(mod_user_implemented)) {
 					php_error_docref(NULL, E_WARNING, "Failed to write session data (%s). Please "
 									 "verify that the current setting of session.save_path "
@@ -556,6 +575,18 @@ static void php_session_save_current_state(bool write)
 
 	if (PS(mod_data) || PS(mod_user_implemented)) {
 		PS(mod)->s_close(&PS(mod_data));
+	}
+
+	if (saved_exception) {
+		if (EG(current_execute_data)) {
+			EG(current_execute_data)->opline = EG(exception_op);
+			EG(opline_before_exception) = saved_opline_before_exception;
+		}
+		if (EG(exception)) {
+			zend_exception_set_previous(EG(exception), saved_exception);
+		} else {
+			EG(exception) = saved_exception;
+		}
 	}
 }
 
