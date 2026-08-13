@@ -6,6 +6,10 @@ PHP                                                                        NEWS
   . Fixed bug GH-15375 (Nested "yield from" skips items after a valid() or
     next() call on the inner generator). (iliaal)
 
+- PDO:
+  . Fixed a leak when a persistent connection failed a liveness check
+    with no other live PDO handle. (iliaal)
+
 27 Aug 2026, PHP 8.4.25
 
 - Core:
