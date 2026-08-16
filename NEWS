@@ -20,6 +20,10 @@ PHP                                                                        NEWS
     left busy for the next fetch, and rows delivered from a result another
     statement took over. (KentarouTakeda)
 
+- Intl:
+  . Fixed a use-after-free when IntlRuleBasedBreakIterator is constructed
+    from compiled rules and the source string is released. (iliaal)
+
 - Phar:
   . Fixed Phar archives being automatically detected when ".phar" only occurs
     in a directory name or is not a filename extension in an included file's
