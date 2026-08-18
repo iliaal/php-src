@@ -10,6 +10,10 @@ PHP                                                                        NEWS
   . Fixed a use-after-free when cloning a DOMNameSpaceNode after
     DOMDocument::xinclude(). (iliaal)
 
+- PDO:
+  . Fixed persistent connections with a colon in the username or password
+    reusing another connection's handle. (iliaal)
+
 - Intl:
   . Fixed a double-free when IntlGregorianCalendar construction fails after
     the ICU constructor adopts the TimeZone. (iliaal)
