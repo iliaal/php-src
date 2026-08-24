@@ -49,6 +49,9 @@ PHP                                                                        NEWS
   . Fixed bug GH-17787 (ZipArchive stream stops reading early when the archive
     is freed while the stream is still open). (Eyüp Can Akman)
 
+- PGSQL:
+  . Fixed pg_lo_write() rejecting data containing null bytes. (iliaal)
+
 - SAPI:
   . Fixed fuzzer targets failing to build in isolation. (Mrmaxmeier)
   . Fixed returns uninitialized value on LiteSpeed lsapi SAPI (Go Kudo)
