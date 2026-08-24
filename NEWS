@@ -40,6 +40,8 @@ PHP                                                                        NEWS
 - PDO:
   . Fixed a leak when a persistent connection failed a liveness check
     with no other live PDO handle. (iliaal)
+  . Fixed the argument reported in error messages when setting an invalid
+    attribute via the PDO constructor options array. (iliaal)
 
 - Readline:
   . Fixed the interactive shell not waiting for the pager process to exit.
