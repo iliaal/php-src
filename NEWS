@@ -205,6 +205,8 @@ PHP                                                                        NEWS
 - ODBC:
   . Fixed bug GH-22668 (Heap buffer over-read when a column value exceeds the
     driver-reported display size). (iliaal)
+  . Fixed odbc_field_len(), odbc_field_scale() and odbc_field_type() returning
+    uninitialized memory when SQLColAttribute fails. (iliaal)
 
 - OpenSSL:
   . Fixed timeout for supplemental read at end of a blocking stream in SSL
