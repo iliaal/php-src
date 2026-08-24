@@ -118,6 +118,9 @@ PHP                                                                        NEWS
   . Fix corruption in mod_mm. (ndossche)
   . Fixed bug GH-23043 (broken session id code can cause zend_mm_heap
     corrupted). (ndossche)
+  . Fixed session_start() proceeding with an uninitialized session ID when
+    the save handler's create_sid() fails during strict-mode re-creation.
+    (iliaal)
 
 - SimpleXML:
   . Fixed integer element offsets that cannot resolve aliasing an existing
