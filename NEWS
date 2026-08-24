@@ -38,6 +38,8 @@ PHP                                                                        NEWS
     (Arnaud, iliaal)
 
 - PDO:
+  . Fixed bindColumn() registering a binding for an unknown column name after
+    an exception was thrown. (iliaal)
   . Fixed a leak when a persistent connection failed a liveness check
     with no other live PDO handle. (iliaal)
 
