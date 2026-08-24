@@ -290,6 +290,7 @@ TSRM_API ts_rsrc_id ts_allocate_id(ts_rsrc_id *rsrc_id, size_t size, ts_allocate
 		_tmp = (tsrm_resource_type *) realloc(resource_types_table, sizeof(tsrm_resource_type)*id_count);
 		if (!_tmp) {
 			TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate storage for resource"));
+			id_count--;
 			*rsrc_id = 0;
 			tsrm_mutex_unlock(tsmm_mutex);
 			return 0;
@@ -333,6 +334,7 @@ TSRM_API ts_rsrc_id ts_allocate_fast_id(ts_rsrc_id *rsrc_id, size_t *offset, siz
 	size = TSRM_ALIGNED_SIZE(size);
 	if (tsrm_reserved_size - tsrm_reserved_pos < size) {
 		TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate space for fast resource"));
+		id_count--;
 		*rsrc_id = 0;
 		*offset = 0;
 		tsrm_mutex_unlock(tsmm_mutex);
@@ -348,6 +350,8 @@ TSRM_API ts_rsrc_id ts_allocate_fast_id(ts_rsrc_id *rsrc_id, size_t *offset, siz
 		_tmp = (tsrm_resource_type *) realloc(resource_types_table, sizeof(tsrm_resource_type)*id_count);
 		if (!_tmp) {
 			TSRM_ERROR((TSRM_ERROR_LEVEL_ERROR, "Unable to allocate storage for resource"));
+			tsrm_reserved_pos -= size;
+			id_count--;
 			*rsrc_id = 0;
 			tsrm_mutex_unlock(tsmm_mutex);
 			return 0;
