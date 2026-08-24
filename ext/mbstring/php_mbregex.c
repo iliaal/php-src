@@ -772,6 +772,9 @@ static inline void mb_regex_substitute(
 				if (clen != 1 || p == eos || (p[0] != '<' && p[0] != '\'')) {
 					/* not a backref delimiter */
 					p += clen;
+					if (p > eos) {
+						p = eos;
+					}
 					smart_str_appendl(pbuf, sp, p - sp);
 					continue;
 				}
@@ -791,7 +794,7 @@ static inline void mb_regex_substitute(
 					if (maybe_num && !isdigit((unsigned char)name_end[0])) maybe_num = 0;
 					name_end++;
 				}
-				p = name_end + 1;
+				p = name_end < eos ? name_end + 1 : eos;
 				if (name_end - name < 1 || name_end >= eos) {
 					/* the backref was empty or we failed to find the end delimiter */
 					smart_str_appendl(pbuf, sp, p - sp);
