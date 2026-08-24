@@ -115,6 +115,8 @@ PHP                                                                        NEWS
     is freed while the stream is still open). (Eyüp Can Akman)
 
 - Session:
+  . Fixed calling SessionHandler::open() twice without an intervening close()
+    when resetting or re-initializing an active session. (iliaal)
   . Fix corruption in mod_mm. (ndossche)
   . Fixed bug GH-23043 (broken session id code can cause zend_mm_heap
     corrupted). (ndossche)
