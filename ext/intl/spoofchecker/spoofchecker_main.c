@@ -43,6 +43,7 @@ PHP_METHOD(Spoofchecker, isSuspicious)
 #endif
 
 	if (U_FAILURE(SPOOFCHECKER_ERROR_CODE(co))) {
+		intl_error_set_code(NULL, SPOOFCHECKER_ERROR_CODE(co));
 		php_error_docref(NULL, E_WARNING, "(%d) %s", SPOOFCHECKER_ERROR_CODE(co), u_errorName(SPOOFCHECKER_ERROR_CODE(co)));
 #if U_ICU_VERSION_MAJOR_NUM >= 58
 		errmask = uspoof_getCheckResultChecks(co->uspoofres, SPOOFCHECKER_ERROR_CODE_P(co));
@@ -51,7 +52,7 @@ PHP_METHOD(Spoofchecker, isSuspicious)
 			php_error_docref(NULL, E_WARNING, "unexpected error (%d), does not relate to the flags passed to setChecks (%d)", ret, errmask);
 		}
 #endif
-		RETURN_TRUE;
+		RETURN_FALSE;
 	}
 
 	if (error_code) {
@@ -83,8 +84,9 @@ PHP_METHOD(Spoofchecker, areConfusable)
 		ret = uspoof_areConfusableUTF8(co->uspoof, ZSTR_VAL(s1), (int32_t)ZSTR_LEN(s1), ZSTR_VAL(s2), (int32_t)ZSTR_LEN(s2), SPOOFCHECKER_ERROR_CODE_P(co));
 	}
 	if (U_FAILURE(SPOOFCHECKER_ERROR_CODE(co))) {
+		intl_error_set_code(NULL, SPOOFCHECKER_ERROR_CODE(co));
 		php_error_docref(NULL, E_WARNING, "(%d) %s", SPOOFCHECKER_ERROR_CODE(co), u_errorName(SPOOFCHECKER_ERROR_CODE(co)));
-		RETURN_TRUE;
+		RETURN_FALSE;
 	}
 
 	if (error_code) {
