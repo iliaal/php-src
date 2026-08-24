@@ -9,6 +9,8 @@ PHP                                                                        NEWS
     middle generator delegates again). (Lazizbek Ergashev)
 
 - DOM:
+  . Fixed DOMNamedNodeMap::getNamedItemNS() with a null namespace incorrectly
+    matching namespaced attributes. (iliaal)
   . Fixed a use-after-free when cloning a DOMNameSpaceNode after
     DOMDocument::xinclude(). (iliaal)
   . Fixed a crash in DOMXPath when a php:function callback receives a nodeset

@@ -63,7 +63,7 @@ PHP_METHOD(DOMNamedNodeMap, getNamedItem)
 	}
 
 	dom_nnodemap_object *objmap = Z_DOMOBJ_P(ZEND_THIS)->ptr;
-	php_dom_obj_map_get_ns_named_item_into_zval(objmap, named, NULL, return_value);
+	php_dom_obj_map_get_named_item_into_zval(objmap, named, return_value);
 }
 /* }}} end dom_namednodemap_get_named_item */
 
