@@ -41,6 +41,10 @@ PHP                                                                        NEWS
   . Fixed a leak when a persistent connection failed a liveness check
     with no other live PDO handle. (iliaal)
 
+- SPL:
+  . Fixed a use-after-free in SplDoublyLinkedList::serialize() when a
+    re-entrant callback frees list elements during serialization. (iliaal)
+
 - Standard:
   . Fixed a memory leak in array_merge_recursive() when the recursive merge of
     an object converted to an array fails. (David Carlier)
