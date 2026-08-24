@@ -191,6 +191,10 @@ PHP_METHOD(SQLite3, close)
 	}
 
 	if (db_obj->initialised) {
+		if (db_obj->in_callback) {
+			zend_throw_error(NULL, "Cannot close SQLite3 database while inside a callback");
+			RETURN_THROWS();
+		}
 		zend_llist_clean(&(db_obj->free_list));
 		if(db_obj->db) {
 			errcode = sqlite3_close(db_obj->db);
@@ -766,7 +770,7 @@ PHP_METHOD(SQLite3, querySingle)
 }
 /* }}} */
 
-static int sqlite3_do_callback(zend_fcall_info_cache *fcc, uint32_t argc, sqlite3_value **argv, sqlite3_context *context, int is_agg) /* {{{ */
+static int sqlite3_do_callback(zend_fcall_info_cache *fcc, uint32_t argc, sqlite3_value **argv, sqlite3_context *context, int is_agg, int *in_callback) /* {{{ */
 {
 	zval *zargs = NULL;
 	zval retval;
@@ -780,6 +784,10 @@ static int sqlite3_do_callback(zend_fcall_info_cache *fcc, uint32_t argc, sqlite
 	}
 
 	fake_argc = argc + is_agg;
+
+	if (in_callback) {
+		(*in_callback)++;
+	}
 
 	/* build up the params */
 	if (fake_argc) {
@@ -824,6 +832,10 @@ static int sqlite3_do_callback(zend_fcall_info_cache *fcc, uint32_t argc, sqlite
 	}
 
 	zend_call_known_fcc(fcc, &retval, fake_argc, zargs, /* named_params */ NULL);
+
+	if (in_callback) {
+		(*in_callback)--;
+	}
 
 	/* clean up the params */
 	if (is_agg) {
@@ -897,7 +909,7 @@ static void php_sqlite3_callback_func(sqlite3_context *context, int argc, sqlite
 {
 	php_sqlite3_func *func = (php_sqlite3_func *)sqlite3_user_data(context);
 
-	sqlite3_do_callback(&func->func, argc, argv, context, 0);
+	sqlite3_do_callback(&func->func, argc, argv, context, 0, func->in_callback_ptr);
 }
 /* }}}*/
 
@@ -908,7 +920,7 @@ static void php_sqlite3_callback_step(sqlite3_context *context, int argc, sqlite
 
 	agg_context->row_count++;
 
-	sqlite3_do_callback(&func->step, argc, argv, context, 1);
+	sqlite3_do_callback(&func->step, argc, argv, context, 1, func->in_callback_ptr);
 }
 /* }}} */
 
@@ -919,7 +931,7 @@ static void php_sqlite3_callback_final(sqlite3_context *context) /* {{{ */
 
 	agg_context->row_count = 0;
 
-	sqlite3_do_callback(&func->fini, 0, NULL, context, 1);
+	sqlite3_do_callback(&func->fini, 0, NULL, context, 1, func->in_callback_ptr);
 }
 /* }}} */
 
@@ -938,7 +950,15 @@ static int php_sqlite3_callback_compare(void *coll, int a_len, const void *a, in
 	ZVAL_STRINGL(&zargs[0], a, a_len);
 	ZVAL_STRINGL(&zargs[1], b, b_len);
 
+	if (collation->in_callback_ptr) {
+		(*collation->in_callback_ptr)++;
+	}
+
 	zend_call_known_fcc(&collation->cmp_func, &retval, /* argc */ 2, zargs, /* named_params */ NULL);
+
+	if (collation->in_callback_ptr) {
+		(*collation->in_callback_ptr)--;
+	}
 
 	zval_ptr_dtor(&zargs[0]);
 	zval_ptr_dtor(&zargs[1]);
@@ -988,6 +1008,7 @@ PHP_METHOD(SQLite3, createFunction)
 	}
 
 	func = (php_sqlite3_func *)ecalloc(1, sizeof(*func));
+	func->in_callback_ptr = &db_obj->in_callback;
 
 	if (sqlite3_create_function(db_obj->db, sql_func, sql_func_num_args, flags | SQLITE_UTF8, func, php_sqlite3_callback_func, NULL, NULL) == SQLITE_OK) {
 		func->func_name = estrdup(sql_func);
@@ -1037,6 +1058,7 @@ PHP_METHOD(SQLite3, createAggregate)
 	}
 
 	func = (php_sqlite3_func *)ecalloc(1, sizeof(*func));
+	func->in_callback_ptr = &db_obj->in_callback;
 
 	if (sqlite3_create_function(db_obj->db, sql_func, sql_func_num_args, SQLITE_UTF8, func, NULL, php_sqlite3_callback_step, php_sqlite3_callback_final) == SQLITE_OK) {
 		func->func_name = estrdup(sql_func);
@@ -1085,6 +1107,7 @@ PHP_METHOD(SQLite3, createCollation)
 	}
 
 	collation = (php_sqlite3_collation *)ecalloc(1, sizeof(*collation));
+	collation->in_callback_ptr = &db_obj->in_callback;
 	if (sqlite3_create_collation(db_obj->db, collation_name, SQLITE_UTF8, collation, php_sqlite3_callback_compare) == SQLITE_OK) {
 		collation->collation_name = estrdup(collation_name);
 
@@ -2152,7 +2175,9 @@ static int php_sqlite3_authorizer(void *autharg, int action, const char *arg1, c
 
 	int authreturn = SQLITE_DENY;
 
+	db_obj->in_callback++;
 	zend_call_known_fcc(&db_obj->authorizer_fcc, &retval, /* argc */ 5, argv, /* named_params */ NULL);
+	db_obj->in_callback--;
 	if (Z_ISUNDEF(retval)) {
 		php_sqlite3_error(db_obj, 0, "An error occurred while invoking the authorizer callback");
 	} else {
