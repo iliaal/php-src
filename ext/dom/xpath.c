@@ -336,6 +336,7 @@ static void php_xpath_eval(INTERNAL_FUNCTION_PARAMETERS, int type, bool modern) 
 	}
 
 	if (! xpathobjp) {
+		php_dom_xpath_callbacks_clean_node_list(&intern->xpath_callbacks);
 		if (modern) {
 			if (!EG(exception)) {
 				zend_throw_error(NULL, "Could not evaluate XPath expression");
@@ -426,6 +427,8 @@ static void php_xpath_eval(INTERNAL_FUNCTION_PARAMETERS, int type, bool modern) 
 			RETVAL_NULL();
 			break;
 	}
+
+	php_dom_xpath_callbacks_clean_node_list(&intern->xpath_callbacks);
 
 	xmlXPathFreeObject(xpathobjp);
 }
