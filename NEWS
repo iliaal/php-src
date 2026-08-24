@@ -8,6 +8,10 @@ PHP                                                                        NEWS
   . Fixed bug GH-23301 (Nested "yield from" yields a value twice when the
     middle generator delegates again). (Lazizbek Ergashev)
 
+- Curl:
+  . Fixed a memory leak of the pushed handle when CURLMOPT_PUSHFUNCTION denies
+    the push or throws. (iliaal)
+
 - DOM:
   . Fixed a use-after-free when cloning a DOMNameSpaceNode after
     DOMDocument::xinclude(). (iliaal)
