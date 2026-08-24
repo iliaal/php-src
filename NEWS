@@ -255,6 +255,8 @@ PHP                                                                        NEWS
     PHP 8.3 and PHP 8.5). (jorgsowa)
 
 - SPL:
+  . Fixed GlobIterator::count() fatal error instead of throwing an Error on
+    uninitialized objects. (iliaal)
   . Fix class_parents for classes with leading slash in non-autoload mode.
     (jorgsowa)
   . Ignore leading back-slash in class_parents(), class_implements(), and

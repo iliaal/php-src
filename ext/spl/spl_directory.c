@@ -1595,21 +1595,17 @@ PHP_METHOD(GlobIterator, __construct)
 }
 /* }}} */
 
-/* {{{ Return the number of directories and files found by globbing */
 PHP_METHOD(GlobIterator, count)
 {
 	spl_filesystem_object *intern = spl_filesystem_from_obj(Z_OBJ_P(ZEND_THIS));
 
-	if (zend_parse_parameters_none() == FAILURE) {
-		RETURN_THROWS();
-	}
+	ZEND_PARSE_PARAMETERS_NONE();
 
-	if (spl_intern_is_glob(intern)) {
+	if (EXPECTED(spl_intern_is_glob(intern))) {
 		RETURN_LONG(php_glob_stream_get_count(intern->u.dir.dirp, NULL));
 	} else {
-		/* This can happen by abusing destructors. */
-		/* TODO: relax this from E_ERROR to an exception */
-		php_error_docref(NULL, E_ERROR, "GlobIterator lost glob state");
+		zend_throw_error(NULL, "GlobIterator is not initialized");
+		RETURN_THROWS();
 	}
 }
 /* }}} */
