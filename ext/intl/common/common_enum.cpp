@@ -37,6 +37,7 @@ void zoi_with_current_dtor(zend_object_iterator *iter)
 	zoi_with_current *zoiwc = (zoi_with_current*)iter;
 	zval_ptr_dtor(&zoiwc->wrapping_obj);
 	ZVAL_UNDEF(&zoiwc->wrapping_obj);
+	iter->funcs->invalidate_current(iter);
 }
 
 U_CFUNC zend_result zoi_with_current_valid(zend_object_iterator *iter)
