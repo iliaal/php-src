@@ -40,6 +40,9 @@ PHP                                                                        NEWS
 - PDO:
   . Fixed a leak when a persistent connection failed a liveness check
     with no other live PDO handle. (iliaal)
+  . Reused persistent connections no longer keep stale fetch-related
+    attributes (case conversion, null handling, stringify, default fetch
+    mode) from the previous request. (iliaal)
 
 - Standard:
   . Fixed a memory leak in array_merge_recursive() when the recursive merge of
