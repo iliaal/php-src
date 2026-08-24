@@ -52,6 +52,8 @@ PHP                                                                        NEWS
 - SAPI:
   . Fixed fuzzer targets failing to build in isolation. (Mrmaxmeier)
   . Fixed returns uninitialized value on LiteSpeed lsapi SAPI (Go Kudo)
+  . Fixed CLI --repeat entering an infinite loop with a value below 1 or an
+    overflowing count; such values are now rejected with a usage error. (iliaal)
 
 27 Aug 2026, PHP 8.4.25
 
