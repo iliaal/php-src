@@ -115,6 +115,8 @@ PHP                                                                        NEWS
     is freed while the stream is still open). (Eyüp Can Akman)
 
 - Session:
+  . Fixed bug GH-15529 (bailout in a userland save handler callback leaves the
+    recursion guard sticky, breaking the shutdown flush). (iliaal)
   . Fix corruption in mod_mm. (ndossche)
   . Fixed bug GH-23043 (broken session id code can cause zend_mm_heap
     corrupted). (ndossche)
@@ -205,6 +207,8 @@ PHP                                                                        NEWS
 - ODBC:
   . Fixed bug GH-22668 (Heap buffer over-read when a column value exceeds the
     driver-reported display size). (iliaal)
+  . Fixed odbc_field_len(), odbc_field_scale() and odbc_field_type() returning
+    uninitialized memory when SQLColAttribute fails. (iliaal)
 
 - OpenSSL:
   . Fixed timeout for supplemental read at end of a blocking stream in SSL
