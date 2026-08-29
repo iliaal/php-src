@@ -41,9 +41,12 @@ ZEND_EXTERN_MODULE_GLOBALS( intl )
 
 static const size_t DEF_SORT_KEYS_BUF_SIZE = 1048576;
 static const size_t DEF_SORT_KEYS_BUF_INCREMENT = 1048576;
+static const size_t MIN_SORT_KEYS_BUF_SIZE = 4096;
+static const size_t SORT_KEY_LENGTH_ESTIMATE = 32;
 
 static const size_t DEF_SORT_KEYS_INDX_BUF_SIZE = 1048576;
 static const size_t DEF_SORT_KEYS_INDX_BUF_INCREMENT = 1048576;
+static const size_t MIN_SORT_KEYS_INDX_BUF_SIZE = 4096;
 
 static const size_t DEF_UTF16_BUF_SIZE = 1024;
 
@@ -354,10 +357,11 @@ PHP_FUNCTION( collator_sort_with_sort_keys )
 	uint32_t    bufIncrement         = 0;
 
 	collator_sort_key_index_t* sortKeyIndxBuf = NULL;            /* buffer to store 'indexes' which will be passed to 'qsort' */
-	uint32_t    sortKeyIndxBufSize   = DEF_SORT_KEYS_INDX_BUF_SIZE;
+	uint32_t    sortKeyIndxBufSize   = 0;
 	uint32_t    sortKeyIndxSize      = sizeof( collator_sort_key_index_t );
 
 	uint32_t    sortKeyCount         = 0;
+	uint32_t    numElements          = 0;
 	uint32_t    j                    = 0;
 
 	UChar*      utf16_buf            = NULL;                     /* tmp buffer to hold current processing string in utf-16 */
@@ -392,6 +396,26 @@ PHP_FUNCTION( collator_sort_with_sort_keys )
 
 	if( !hash || zend_hash_num_elements( hash ) == 0 )
 		RETURN_TRUE;
+
+	numElements = zend_hash_num_elements( hash );
+
+	if( numElements > DEF_SORT_KEYS_BUF_SIZE / SORT_KEY_LENGTH_ESTIMATE ) {
+		sortKeyBufSize = DEF_SORT_KEYS_BUF_SIZE;
+	} else {
+		sortKeyBufSize = numElements * SORT_KEY_LENGTH_ESTIMATE;
+	}
+	if( sortKeyBufSize < MIN_SORT_KEYS_BUF_SIZE ) {
+		sortKeyBufSize = MIN_SORT_KEYS_BUF_SIZE;
+	}
+
+	if( numElements > DEF_SORT_KEYS_INDX_BUF_SIZE / sortKeyIndxSize ) {
+		sortKeyIndxBufSize = DEF_SORT_KEYS_INDX_BUF_SIZE;
+	} else {
+		sortKeyIndxBufSize = numElements * sortKeyIndxSize;
+	}
+	if( sortKeyIndxBufSize < MIN_SORT_KEYS_INDX_BUF_SIZE ) {
+		sortKeyIndxBufSize = MIN_SORT_KEYS_INDX_BUF_SIZE;
+	}
 
 	/* Create bufers */
 	sortKeyBuf     = ecalloc( sortKeyBufSize,     sizeof( char    ) );
