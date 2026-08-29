@@ -2066,7 +2066,7 @@ static void sdl_serialize_soap_body(const sdlSoapBindingFunctionBodyPtr body, co
 				sdlSoapBindingFunctionHeaderPtr tmp2;
 				const zend_string *key_inner;
 
-				ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(body->headers, key_inner, tmp2) {
+				ZEND_HASH_MAP_FOREACH_STR_KEY_PTR(tmp->headerfaults, key_inner, tmp2) {
 					sdl_serialize_key(key_inner, out);
 					WSDL_CACHE_PUT_1(tmp2->use, out);
 					if (tmp2->use == SOAP_ENCODED) {
