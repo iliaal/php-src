@@ -145,6 +145,12 @@ static void php_rshutdown_session_globals(void) /* {{{ */
 			PS(mod)->s_close(&PS(mod_data));
 		} zend_end_try();
 	}
+	if (PS(mod_user_is_open) && PS(default_mod) && PS(mod_data)) {
+		PS(mod_user_is_open) = 0;
+		zend_try {
+			PS(default_mod)->s_close(&PS(mod_data));
+		} zend_end_try();
+	}
 	if (PS(id)) {
 		zend_string_release_ex(PS(id), 0);
 		PS(id) = NULL;
@@ -2410,7 +2416,13 @@ PHP_FUNCTION(session_regenerate_id)
 			RETURN_FALSE;
 		}
 	}
+
 	PS(mod)->s_close(&PS(mod_data));
+
+	if (PS(session_status) != php_session_active) {
+		php_error_docref(NULL, E_WARNING, "Session ID cannot be regenerated because the save handler closed the session");
+		RETURN_FALSE;
+	}
 
 	/* New session data */
 	if (PS(session_vars)) {
