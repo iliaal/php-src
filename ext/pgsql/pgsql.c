@@ -2799,7 +2799,8 @@ PHP_FUNCTION(pg_lo_read)
 PHP_FUNCTION(pg_lo_write)
 {
 	zval *pgsql_id;
-	zend_string *str;
+	char *str;
+	size_t str_len;
 	zend_long z_len;
 	bool z_len_is_null = true;
 	size_t nbytes;
@@ -2808,7 +2809,7 @@ PHP_FUNCTION(pg_lo_write)
 
 	ZEND_PARSE_PARAMETERS_START(2, 3)
 		Z_PARAM_OBJECT_OF_CLASS(pgsql_id, pgsql_lob_ce)
-		Z_PARAM_PATH_STR(str)
+		Z_PARAM_STRING(str, str_len)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG_OR_NULL(z_len, z_len_is_null)
 	ZEND_PARSE_PARAMETERS_END();
@@ -2818,20 +2819,20 @@ PHP_FUNCTION(pg_lo_write)
 			zend_argument_value_error(3, "must be greater than or equal to 0");
 			RETURN_THROWS();
 		}
-		if (z_len > (zend_long)ZSTR_LEN(str)) {
+		if (z_len > (zend_long)str_len) {
 			zend_argument_value_error(3, "must be less than or equal to the length of argument #2 ($buf)");
 			RETURN_THROWS();
 		}
 		len = z_len;
 	}
 	else {
-		len = ZSTR_LEN(str);
+		len = str_len;
 	}
 
 	pgsql = Z_PGSQL_LOB_P(pgsql_id);
 	CHECK_PGSQL_LOB(pgsql);
 
-	if ((nbytes = lo_write((PGconn *)pgsql->conn, pgsql->lofd, ZSTR_VAL(str), len)) == (size_t)-1) {
+	if ((nbytes = lo_write((PGconn *)pgsql->conn, pgsql->lofd, str, len)) == (size_t)-1) {
 		RETURN_FALSE;
 	}
 
