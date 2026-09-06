@@ -89,6 +89,8 @@ PHP                                                                        NEWS
     that still have a live wrapper). (iliaal)
   . Fixed a use-after-free when Dom\Element::setAttributeNS() replaces the
     value of an attribute whose child still has a live wrapper. (iliaal)
+  . getElementById() now finds elements whose id attribute was set with
+    setAttribute()/setAttributeNS() on Dom\XMLDocument. (iliaal)
 
 - GD:
   . Fixed imageaffinematrixget() and imageaffinematrixconcat() reporting the
