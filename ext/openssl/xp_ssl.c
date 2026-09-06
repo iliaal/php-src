@@ -2756,6 +2756,7 @@ static zend_result php_openssl_setup_crypto(php_stream *stream,
 		} else {
 			SSL_CTX_up_ref(parent_sslsock->ctx);
 			sslsock->ctx = parent_sslsock->ctx;
+			SSL_CTX_set_ex_data(sslsock->ctx, php_openssl_get_ctx_stream_data_index(), stream);
 			if (parent_sslsock->session_callbacks) {
 				parent_sslsock->session_callbacks->refcount++;
 				sslsock->session_callbacks = parent_sslsock->session_callbacks;
