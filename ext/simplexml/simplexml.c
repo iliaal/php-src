@@ -1727,7 +1727,8 @@ PHP_METHOD(SimpleXMLElement, addChild)
 		}
 	}
 
-	node_as_zval_str(sxe, newnode, return_value, SXE_ITER_NONE, localname, prefix, 0);
+	node_as_zval_str(sxe, newnode, return_value, SXE_ITER_NONE, localname,
+		newnode->ns ? newnode->ns->prefix : NULL, 1);
 
 	xmlFree(localname);
 	if (prefix != NULL) {
