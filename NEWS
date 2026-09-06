@@ -178,6 +178,8 @@ PHP                                                                        NEWS
   . Fix corruption in mod_mm. (ndossche)
   . Fixed bug GH-23043 (broken session id code can cause zend_mm_heap
     corrupted). (ndossche)
+  . Fixed session_destroy() not removing the session file when the files
+    save handler holds no open descriptor for it. (iliaal)
 
 - SimpleXML:
   . Fixed integer element offsets that cannot resolve aliasing an existing
