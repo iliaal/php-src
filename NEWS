@@ -92,6 +92,10 @@ PHP                                                                        NEWS
   . Fixed bug GH-23477 (Memory leak on duplicate native Phar manifest entries).
     (Weilin Du)
 
+- Session:
+  . Fixed calling SessionHandler::open() twice without an intervening
+    close() when re-initializing an active session. (Ilia Alshanetsky)
+
 - SOAP:
   . Fixed bug GH-23447 (Segfault when a class passed to SoapServer::setClass()
     fails to initialize). (Lazizbek Ergashev)

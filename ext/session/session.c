@@ -420,6 +420,10 @@ static zend_result php_session_initialize(void) /* {{{ */
 {
 	zend_string *val = NULL;
 
+	if (PS(session_status) == php_session_active) {
+		php_session_abort();
+	}
+
 	PS(session_status) = php_session_active;
 
 	if (!PS(mod)) {
