@@ -1898,9 +1898,11 @@ static bool pdo_stmt_do_next_rowset(pdo_stmt_t *stmt)
 		return 0;
 	}
 
-	pdo_stmt_describe_columns(stmt);
+	if (!pdo_stmt_describe_columns(stmt)) {
+		return false;
+	}
 
-	return 1;
+	return true;
 }
 
 PHP_METHOD(PDOStatement, nextRowset)
