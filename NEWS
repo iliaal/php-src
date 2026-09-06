@@ -175,6 +175,8 @@ PHP                                                                        NEWS
     is freed while the stream is still open). (Eyüp Can Akman)
 
 - Session:
+  . Fixed session data loss in the files save handler when writing the session
+    file fails after it was already truncated. (iliaal)
   . Fix corruption in mod_mm. (ndossche)
   . Fixed bug GH-23043 (broken session id code can cause zend_mm_heap
     corrupted). (ndossche)
