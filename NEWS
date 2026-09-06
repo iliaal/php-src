@@ -204,6 +204,8 @@ PHP                                                                        NEWS
 - Streams:
   . Fixed bug GH-15836 (Use-after-free when a user stream filter accesses
     $this->stream during the close flush). (iliaal)
+  . Prevented stack exhaustion through unbounded recursion in user stream
+    wrappers whose nested opens use distinct filenames. (iliaal)
 
 - Sysvshm:
   . Fixed out-of-bounds write when shm_attach() opens an existing segment with

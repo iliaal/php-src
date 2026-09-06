@@ -98,6 +98,7 @@ typedef struct {
 	char *user_agent; /* for the http wrapper */
 	char *from_address; /* for the ftp and http wrappers */
 	const char *user_stream_current_filename; /* for simple recursion protection */
+	int user_stream_recursion_depth;
 	php_stream_context *default_context;
 	HashTable *stream_wrappers;			/* per-request copy of url_stream_wrappers_hash */
 	HashTable *stream_filters;			/* per-request copy of stream_filters_hash */
