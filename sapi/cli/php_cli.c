@@ -48,6 +48,7 @@
 
 #include <signal.h>
 #include <locale.h>
+#include <limits.h>
 #include "zend.h"
 #include "zend_extensions.h"
 #include "php_ini.h"
@@ -817,8 +818,18 @@ static int do_cli(int argc, char **argv) /* {{{ */
 				context.mode = PHP_CLI_MODE_SHOW_INI_CONFIG;
 				break;
 			case 16:
-				num_repeats = atoi(php_optarg);
+			{
+				char *end_ptr = NULL;
+				zend_long repeats = ZEND_STRTOL(php_optarg, &end_ptr, 10);
+
+				if (!php_optarg[0] || end_ptr == NULL || *end_ptr != '\0'
+					|| repeats < 1 || repeats > (zend_long)INT_MAX) {
+					param_error = "Value of --repeat must be a positive integer.\n";
+					break;
+				}
+				num_repeats = (int)repeats;
 				break;
+			}
 			default:
 				break;
 			}
