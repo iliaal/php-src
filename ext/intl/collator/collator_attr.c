@@ -40,6 +40,15 @@ PHP_FUNCTION( collator_get_attribute )
 	/* Fetch the object. */
 	COLLATOR_METHOD_FETCH_OBJECT;
 
+	if (!co || !co->ucoll) {
+		intl_error_set_code( NULL, COLLATOR_ERROR_CODE( co ) );
+		intl_errors_set_custom_msg( COLLATOR_ERROR_P( co ),
+			"Object not initialized", 0 );
+		zend_throw_error(NULL, "Object not initialized");
+
+		RETURN_THROWS();
+	}
+
 	value = ucol_getAttribute( co->ucoll, attribute, COLLATOR_ERROR_CODE_P( co ) );
 	COLLATOR_CHECK_STATUS( co, "Error getting attribute value" );
 
@@ -64,6 +73,15 @@ PHP_FUNCTION( collator_set_attribute )
 	/* Fetch the object. */
 	COLLATOR_METHOD_FETCH_OBJECT;
 
+	if (!co || !co->ucoll) {
+		intl_error_set_code( NULL, COLLATOR_ERROR_CODE( co ) );
+		intl_errors_set_custom_msg( COLLATOR_ERROR_P( co ),
+			"Object not initialized", 0 );
+		zend_throw_error(NULL, "Object not initialized");
+
+		RETURN_THROWS();
+	}
+
 	/* Set new value for the given attribute. */
 	ucol_setAttribute( co->ucoll, attribute, value, COLLATOR_ERROR_CODE_P( co ) );
 	COLLATOR_CHECK_STATUS( co, "Error setting attribute value" );
@@ -87,6 +105,15 @@ PHP_FUNCTION( collator_get_strength )
 	/* Fetch the object. */
 	COLLATOR_METHOD_FETCH_OBJECT;
 
+	if (!co || !co->ucoll) {
+		intl_error_set_code( NULL, COLLATOR_ERROR_CODE( co ) );
+		intl_errors_set_custom_msg( COLLATOR_ERROR_P( co ),
+			"Object not initialized", 0 );
+		zend_throw_error(NULL, "Object not initialized");
+
+		RETURN_THROWS();
+	}
+
 	/* Get current strength and return it. */
 	RETURN_LONG( ucol_getStrength( co->ucoll ) );
 }
@@ -108,6 +135,15 @@ PHP_FUNCTION( collator_set_strength )
 
 	/* Fetch the object. */
 	COLLATOR_METHOD_FETCH_OBJECT;
+
+	if (!co || !co->ucoll) {
+		intl_error_set_code( NULL, COLLATOR_ERROR_CODE( co ) );
+		intl_errors_set_custom_msg( COLLATOR_ERROR_P( co ),
+			"Object not initialized", 0 );
+		zend_throw_error(NULL, "Object not initialized");
+
+		RETURN_THROWS();
+	}
 
 	/* Set given strength. */
 	ucol_setStrength( co->ucoll, strength );
