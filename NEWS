@@ -74,6 +74,10 @@ PHP                                                                        NEWS
     returning uninitialized memory when SQLColAttribute fails.
     (Ilia Alshanetsky)
 
+- FPM:
+  . Fixed pool group not being applied when a numeric user without a passwd
+    entry is configured. (iliaal)
+
 - Opcache:
   . Fixed a crash when the huge page SHM remap discarded mappings outside the
     reserved address range. (Piotr Hałas)
