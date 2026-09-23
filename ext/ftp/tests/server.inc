@@ -355,6 +355,7 @@ if ($pid) {
                     fputs($fs, $transfer_type."Foo\0Bar\r\n");
                     fputs($s, "226 Closing data Connection.\r\n");
                     break;
+                case "/fget":
                 case "fget":
                     fputs($s, "150 File status okay; about to open data connection.\r\n");
                     $transfer_type = $ascii? 'ASCII' : 'BINARY' ;
@@ -445,7 +446,8 @@ if ($pid) {
 
             $p2 = $pasv_port % ((int) 1 << 8);
             $p1 = ($pasv_port-$p2)/((int) 1 << 8);
-            fputs($s, "227 Entering Passive Mode. (127,0,0,1,{$p1},{$p2})\r\n");
+            $pasv_host = $pasv_host ?? '127,0,0,1';
+            fputs($s, "227 Entering Passive Mode. ({$pasv_host},{$p1},{$p2})\r\n");
 
             if (empty($bug73457)) {
                 $pasvs = stream_socket_accept($soc,10);
@@ -584,6 +586,8 @@ if ($pid) {
 
             fputs($s, "226 Closing data Connection.\r\n");
             fclose($fs);
+        }elseif (preg_match('/^SIZE \/fget/', $buf)) {
+            fputs($s, "213 8\r\n");
         }elseif (preg_match('/^SIZE \/bug73457/', $buf)) {
             fputs($s, "213 10\r\n");
         }elseif (preg_match("/^SITE/", $buf)) {

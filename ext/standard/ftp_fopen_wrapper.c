@@ -548,9 +548,7 @@ php_stream * php_stream_url_wrap_ftp(php_stream_wrapper *wrapper, const char *pa
 	php_stream_printf(stream, "%s %s\r\n", tmp_line, (resource->path != NULL ? ZSTR_VAL(resource->path) : "/"));
 
 	/* open the data channel */
-	if (hoststart == NULL) {
-		hoststart = ZSTR_VAL(resource->host);
-	}
+	hoststart = ZSTR_VAL(resource->host);
 
 	char *transport;
 	size_t transport_len = spprintf(&transport, 0, "tcp://%s:%d", hoststart, portno);
@@ -725,9 +723,7 @@ static php_stream * php_stream_ftp_opendir(php_stream_wrapper *wrapper, const ch
 	}
 
 	/* open the data channel */
-	if (hoststart == NULL) {
-		hoststart = ZSTR_VAL(resource->host);
-	}
+	hoststart = ZSTR_VAL(resource->host);
 
 	datastream = php_stream_sock_open_host(hoststart, portno, SOCK_STREAM, 0, 0);
 	if (datastream == NULL) {
