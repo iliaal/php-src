@@ -61,7 +61,7 @@ if ($pid) {
     $buf = fread($s, 2048);
 
     function user_auth($buf) {
-        global $user, $s, $ssl, $bug37799;
+        global $user, $s, $ssl, $bug37799, $refuse_prot_p;
 
         if (!empty($ssl)) {
             if ($buf !== "AUTH TLS\r\n") {
@@ -95,9 +95,17 @@ if ($pid) {
                 dump_and_exit($buf);
             }
 
-            fputs($s, "200 OK\r\n");
+            if (!empty($refuse_prot_p)) {
+                fputs($s, "504 Wrong protection.\r\n");
+                $ssl = false;
+            } else {
+                fputs($s, "200 OK\r\n");
+            }
 
             $buf = fread($s, 2048);
+            if (!empty($refuse_prot_p) && ($buf === false || $buf === '')) {
+                return;
+            }
         }
 
         if ($buf == "AUTH TLS\r\n") {
@@ -355,6 +363,7 @@ if ($pid) {
                     fputs($fs, $transfer_type."Foo\0Bar\r\n");
                     fputs($s, "226 Closing data Connection.\r\n");
                     break;
+                case "/fget":
                 case "fget":
                     fputs($s, "150 File status okay; about to open data connection.\r\n");
                     $transfer_type = $ascii? 'ASCII' : 'BINARY' ;
@@ -536,6 +545,8 @@ if ($pid) {
             fputs($s, "350 OK\r\n");
         }elseif (preg_match('/^SIZE largefile/', $buf)) {
             fputs($s, "213 5368709120\r\n");
+        }elseif (!empty($refuse_prot_p) && preg_match('/^SIZE /', $buf)) {
+            fputs($s, "213 35\r\n");
         }elseif (preg_match('/^RNFR existing_file/', $buf, $matches)) {
             fputs($s, "350 File or directory exists, ready for destination name\r\n");
         }elseif (preg_match('/^RNFR nonexisting_file/', $buf, $matches)) {
