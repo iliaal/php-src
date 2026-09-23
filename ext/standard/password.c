@@ -149,16 +149,30 @@ static bool php_password_bcrypt_needs_rehash(const zend_string *hash, zend_array
 	return old_cost != new_cost;
 }
 
-static bool php_password_bcrypt_verify(const zend_string *password, const zend_string *hash) {
-	int status = 0;
-	zend_string *ret = php_crypt(ZSTR_VAL(password), (int)ZSTR_LEN(password), ZSTR_VAL(hash), (int)ZSTR_LEN(hash), 1);
-
-	if (!ret) {
+static bool php_password_bcrypt_verify_valid(const zend_string *hash) {
+	const char *h = ZSTR_VAL(hash);
+	if ((ZSTR_LEN(hash) != 60) ||
+		(h[0] != '$') || (h[1] != '2') ||
+		((h[2] != 'a') && (h[2] != 'b') && (h[2] != 'x') && (h[2] != 'y')) ||
+		(h[3] != '$') || (h[4] < '0') || (h[4] > '9') ||
+		(h[5] < '0') || (h[5] > '9') || (h[6] != '$')) {
 		return false;
 	}
 
-	if (ZSTR_LEN(hash) < 13) {
-		zend_string_free(ret);
+	zend_long cost = (h[4] - '0') * 10 + (h[5] - '0');
+	return (cost >= 4) && (cost <= 31);
+}
+
+static bool php_password_bcrypt_verify(const zend_string *password, const zend_string *hash) {
+	int status = 0;
+	zend_string *ret;
+	const char *h = ZSTR_VAL(hash);
+	if (ZSTR_LEN(hash) >= 2 && h[0] == '$' && h[1] == '2' && !php_password_bcrypt_verify_valid(hash)) {
+		return false;
+	}
+
+	ret = php_crypt(ZSTR_VAL(password), (int)ZSTR_LEN(password), ZSTR_VAL(hash), (int)ZSTR_LEN(hash), 1);
+	if (!ret) {
 		return false;
 	}
 
