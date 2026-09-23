@@ -28,4 +28,6 @@ echo "done\n";
 Warning: session_destroy(): Cannot call session save handler in a recursive manner in %s on line %d
 
 Warning: session_destroy(): Session object destruction failed in %s on line %d
+
+Warning: session_destroy(): Cannot call session save handler in a recursive manner in %s on line %d
 done
