@@ -95,20 +95,27 @@ static char *next_header_line(char *line)
  * nor an occurrence of the name inside another header's value may leave the real
  * header behind, as that would defeat HTTP_WRAPPER_STRIP_AUTH. */
 static inline void strip_header(char *header_bag, char *lc_header_bag,
-		const char *lc_header_name)
+		const char *lc_header_name, bool allow_leading_wsp)
 {
 	size_t name_len = strlen(lc_header_name);
 	char *lc_line = lc_header_bag;
 
 	while (*lc_line != '\0') {
-		if (strncmp(lc_line, lc_header_name, name_len) != 0) {
+		char *lc_name = lc_line;
+
+		if (allow_leading_wsp) {
+			while (*lc_name == ' ' || *lc_name == '\t') {
+				lc_name++;
+			}
+		}
+		if (strncmp(lc_name, lc_header_name, name_len) != 0) {
 			lc_line = next_header_line(lc_line);
 			continue;
 		}
 
 		/* the whitespace RFC 7230 forbids before the colon is tolerated by some
 		 * servers, so it must not hide the header from us either */
-		const char *lc_colon = lc_line + name_len;
+		const char *lc_colon = lc_name + name_len;
 		while (*lc_colon == ' ' || *lc_colon == '\t') {
 			lc_colon++;
 		}
@@ -735,7 +742,6 @@ finish:
 			tmp = php_trim(Z_STR_P(tmpzval), NULL, 0, 3);
 		}
 		if (tmp && ZSTR_LEN(tmp)) {
-			char *s;
 			char *t;
 
 			user_headers = estrndup(ZSTR_VAL(tmp), ZSTR_LEN(tmp));
@@ -753,23 +759,16 @@ finish:
 
 			if (!header_init && !redirect_keep_method) {
 				/* strip POST headers on redirect */
-				strip_header(user_headers, t, "content-length");
-				strip_header(user_headers, t, "content-type");
+				strip_header(user_headers, t, "content-length", false);
+				strip_header(user_headers, t, "content-type", false);
 			}
 
 			if (flags & HTTP_WRAPPER_STRIP_AUTH) {
-				strip_header(user_headers, t, "authorization");
-				strip_header(user_headers, t, "cookie");
+				strip_header(user_headers, t, "authorization", false);
+				strip_header(user_headers, t, "cookie", false);
 				if (!use_proxy) {
-					strip_header(user_headers, t, "proxy-authorization");
+					strip_header(user_headers, t, "proxy-authorization", false);
 				}
-			}
-
-			if (*user_headers == '\0') {
-				/* everything got stripped, keeping the empty bag would append a
-				 * stray CRLF and end the header block early */
-				efree(user_headers);
-				user_headers = NULL;
 			}
 
 			if (check_has_header(t, "user-agent:")) {
@@ -795,24 +794,13 @@ finish:
 			}
 
 			/* remove Proxy-Authorization header */
-			if (use_proxy && use_ssl && (s = strstr(t, "proxy-authorization:")) &&
-			    (s == t || *(s-1) == '\n')) {
-				char *p = s + sizeof("proxy-authorization:") - 1;
+			if (use_proxy && use_ssl) {
+				strip_header(user_headers, t, "proxy-authorization", true);
+			}
+			if (*user_headers == '\0') {
 
-				while (s > t && (*(s-1) == ' ' || *(s-1) == '\t')) s--;
-				while (*p != 0 && *p != '\r' && *p != '\n') p++;
-				while (*p == '\r' || *p == '\n') p++;
-				if (*p == 0) {
-					if (s == t) {
-						efree(user_headers);
-						user_headers = NULL;
-					} else {
-						while (s > t && (*(s-1) == '\r' || *(s-1) == '\n')) s--;
-						user_headers[s - t] = 0;
-					}
-				} else {
-					memmove(user_headers + (s - t), user_headers + (p - t), strlen(p) + 1);
-				}
+				efree(user_headers);
+				user_headers = NULL;
 			}
 
 		}
