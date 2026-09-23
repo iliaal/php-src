@@ -1,28 +1,16 @@
 --TEST--
-stream_filter_register() with a class name exist but does not extend php_user_filter and defines a private $filtername prop
+stream_filter_register() rejects a class that does not extend php_user_filter
 --FILE--
 <?php
 class foo {
-	private $filtername;
+    private $filtername;
 }
 
-var_dump(stream_filter_register("invalid_filter", "foo"));
-
-var_dump(stream_filter_append(STDOUT, "invalid_filter"));
-
-$out = fwrite(STDOUT, "Hello\n");
-var_dump($out);
-
+try {
+    stream_filter_register("invalid_filter", foo::class);
+} catch (Throwable $e) {
+    echo $e::class, ': ', $e->getMessage(), PHP_EOL;
+}
 ?>
---EXPECTF--
-bool(true)
-
-Deprecated: Creation of dynamic property foo::$params is deprecated in %s on line %d
-
-Fatal error: Uncaught Error: Cannot access private property foo::$filtername in %s:%d
-Stack trace:
-#0 %s(%d): stream_filter_append(Resource id #2, 'invalid_filter')
-#1 {main}
-  thrown in %s on line %d
-
-Fatal error: Invalid callback foo::filter, class foo does not have a method "filter" in Unknown on line 0
+--EXPECT--
+ValueError: stream_filter_register(): Argument #2 ($class) must be a subclass of php_user_filter

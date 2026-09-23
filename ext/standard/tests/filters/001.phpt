@@ -14,9 +14,17 @@ try {
     echo $e::class, ': ', $e->getMessage(), PHP_EOL;
 }
 
+class invalid_filter {}
+try {
+    stream_filter_register("test2", invalid_filter::class);
+} catch (Throwable $e) {
+    echo $e::class, ': ', $e->getMessage(), PHP_EOL;
+}
+
 echo "Done\n";
 ?>
 --EXPECT--
 ValueError: stream_filter_register(): Argument #1 ($filter_name) must be a non-empty string
 ValueError: stream_filter_register(): Argument #2 ($class) must be a concrete class
+ValueError: stream_filter_register(): Argument #2 ($class) must be a subclass of php_user_filter
 Done

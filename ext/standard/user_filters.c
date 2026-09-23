@@ -599,9 +599,17 @@ PHP_FUNCTION(stream_filter_register)
 		RETURN_THROWS();
 	}
 
-	/* TODO: Check class is a child of php_user_filter? */
 	if (UNEXPECTED(ce->ce_flags & ZEND_ACC_UNINSTANTIABLE)) {
 		zend_argument_value_error(2, "must be a concrete class");
+		RETURN_THROWS();
+	}
+
+	if (zend_hash_exists(php_get_stream_filters_hash(), filtername)) {
+		RETURN_FALSE;
+	}
+
+	if (UNEXPECTED(!instanceof_function(ce, user_filter_class_entry))) {
+		zend_argument_value_error(2, "must be a subclass of php_user_filter");
 		RETURN_THROWS();
 	}
 
