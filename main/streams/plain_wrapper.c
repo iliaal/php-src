@@ -1621,6 +1621,7 @@ static int php_plain_files_metadata(php_stream_wrapper *wrapper, const char *url
 #endif
 	mode_t mode;
 	int ret = 0;
+	int fd;
 	char errstr[256];
 
 #ifdef PHP_WIN32
@@ -1639,20 +1640,20 @@ static int php_plain_files_metadata(php_stream_wrapper *wrapper, const char *url
 	if (php_check_open_basedir(url)) {
 		return 0;
 	}
-
 	switch(option) {
 		case PHP_STREAM_META_TOUCH:
 			newtime = (struct utimbuf *)value;
-			if (VCWD_ACCESS(url, F_OK) != 0) {
-				FILE *file = VCWD_FOPEN(url, "w");
-				if (file == NULL) {
+			fd = VCWD_OPEN_MODE_NO_FOLLOW(url, O_WRONLY | O_CREAT | O_EXCL, 0666);
+			if (fd == -1) {
+				if (errno != EEXIST) {
 					php_stream_wrapper_warn(wrapper, context, REPORT_ERRORS,
 							PermissionDenied,
 							"Unable to create file %s because %s", url,
 							php_socket_strerror_s(errno, errstr, sizeof(errstr)));
 					return 0;
 				}
-				fclose(file);
+			} else {
+				close(fd);
 			}
 
 			ret = VCWD_UTIME(url, newtime);

@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <ctype.h>
 #include <time.h>
 
@@ -599,7 +600,7 @@ PHP_FUNCTION(touch)
 	zend_long filetime = 0, fileatime = 0;
 	bool filetime_is_null = 1, fileatime_is_null = 1;
 	int ret;
-	FILE *file;
+	int fd;
 	struct utimbuf newtimebuf;
 	struct utimbuf *newtime = &newtimebuf;
 	php_stream_wrapper *wrapper;
@@ -653,13 +654,14 @@ PHP_FUNCTION(touch)
 	}
 
 	/* create the file if it doesn't exist already */
-	if (VCWD_ACCESS(filename, F_OK) != 0) {
-		file = VCWD_FOPEN(filename, "w");
-		if (file == NULL) {
+	fd = VCWD_OPEN_MODE_NO_FOLLOW(filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	if (fd == -1) {
+		if (errno != EEXIST) {
 			php_error_docref(NULL, E_WARNING, "Unable to create file %s because %s", filename, strerror(errno));
 			RETURN_FALSE;
 		}
-		fclose(file);
+	} else {
+		close(fd);
 	}
 
 	ret = VCWD_UTIME(filename, newtime);

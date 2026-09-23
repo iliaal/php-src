@@ -182,6 +182,7 @@ CWD_API int virtual_filepath_ex(const char *path, char **filepath, verify_path_f
 CWD_API char *virtual_realpath(const char *path, char *real_path);
 CWD_API FILE *virtual_fopen(const char *path, const char *mode);
 CWD_API int virtual_open(const char *path, int flags, ...);
+CWD_API int virtual_open_nofollow(const char *path, int flags, ...);
 CWD_API int virtual_creat(const char *path, mode_t mode);
 CWD_API int virtual_rename(const char *oldname, const char *newname);
 CWD_API int virtual_stat(const char *path, zend_stat_t *buf);
@@ -208,6 +209,7 @@ CWD_API int virtual_chown(const char *filename, uid_t owner, gid_t group, int li
 #define CWD_EXPAND   0 /* expand "." and ".." but don't resolve symlinks     */
 #define CWD_FILEPATH 1 /* resolve symlinks if file is exist otherwise expand */
 #define CWD_REALPATH 2 /* call realpath(), resolve symlinks. File must exist */
+#define CWD_FILEPATH_NO_FOLLOW 3
 
 CWD_API int virtual_file_ex(cwd_state *state, const char *path, verify_path_func verify_path, int use_realpath);
 
@@ -273,6 +275,7 @@ extern void virtual_cwd_main_cwd_init(uint8_t);
 /* Because open() has two modes, we have to macros to replace it */
 #define VCWD_OPEN(path, flags) virtual_open(path, flags)
 #define VCWD_OPEN_MODE(path, flags, mode) virtual_open(path, flags, mode)
+#define VCWD_OPEN_MODE_NO_FOLLOW(path, flags, mode) virtual_open_nofollow(path, flags, mode)
 #define VCWD_CREAT(path, mode) virtual_creat(path, mode)
 #define VCWD_CHDIR(path) virtual_chdir(path)
 #define VCWD_CHDIR_FILE(path) virtual_chdir_file(path, (int (*)(const char *)) virtual_chdir)
@@ -328,6 +331,7 @@ extern void virtual_cwd_main_cwd_init(uint8_t);
 #define VCWD_GETCWD(buff, size) getcwd(buff, size)
 #define VCWD_CHMOD(path, mode) chmod(path, mode)
 #endif
+#define VCWD_OPEN_MODE_NO_FOLLOW(path, flags, mode) VCWD_OPEN_MODE(path, flags, mode)
 
 #define VCWD_CHDIR_FILE(path) virtual_chdir_file(path, chdir)
 #define VCWD_GETWD(buf) getwd(buf)

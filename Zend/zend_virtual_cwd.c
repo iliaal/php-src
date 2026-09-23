@@ -488,6 +488,7 @@ static size_t tsrm_realpath_r(char *path, size_t start, size_t len, int *ll, tim
 {
 	size_t i, j;
 	int directory = 0, save;
+	bool is_final;
 #ifdef ZEND_WIN32
 	WIN32_FIND_DATAW dataw;
 	HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -517,6 +518,7 @@ static size_t tsrm_realpath_r(char *path, size_t start, size_t len, int *ll, tim
 			i--;
 		}
 		assert(i < MAXPATHLEN);
+		is_final = (i + 1 == len);
 
 		if (i == len ||
 			(i + 1 == len && path[i] == '.')) {
@@ -533,7 +535,8 @@ static size_t tsrm_realpath_r(char *path, size_t start, size_t len, int *ll, tim
 			if (i <= start + 1) {
 				return start ? start : len;
 			}
-			j = tsrm_realpath_r(path, start, i-1, ll, t, use_realpath, true, NULL);
+			j = tsrm_realpath_r(path, start, i-1, ll, t,
+					use_realpath == CWD_FILEPATH_NO_FOLLOW ? CWD_FILEPATH : use_realpath, true, NULL);
 			if (j > start && j != (size_t)-1) {
 				j--;
 				assert(i < MAXPATHLEN);
@@ -572,7 +575,8 @@ static size_t tsrm_realpath_r(char *path, size_t start, size_t len, int *ll, tim
 
 		save = (use_realpath != CWD_EXPAND);
 
-		if (start && save && CWDG(realpath_cache_size_limit)) {
+		if (start && save && CWDG(realpath_cache_size_limit)
+				&& !(use_realpath == CWD_FILEPATH_NO_FOLLOW && is_final)) {
 			/* cache lookup for absolute path */
 			if (!*t) {
 				*t = time(0);
@@ -619,8 +623,9 @@ retry_reparse_point:
 
 retry_reparse_tag_cloud:
 		if(save &&
+				!(use_realpath == CWD_FILEPATH_NO_FOLLOW && is_final) &&
 				!(IS_UNC_PATH(path, len) && len >= 3 && path[2] != '?') &&
-                               (dataw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
+				(dataw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)
 				) {
 			/* File is a reparse point. Get the target */
 			HANDLE hLink = NULL;
@@ -845,7 +850,8 @@ retry_reparse_tag_cloud:
 			if(isabsolute == 1) {
 				if (!((j == 3) && (path[1] == ':') && (path[2] == '\\'))) {
 					/* use_realpath is 0 in the call below coz path is absolute*/
-					j = tsrm_realpath_r(path, 0, j, ll, t, 0, is_dir, &directory);
+					j = tsrm_realpath_r(path, 0, j, ll, t,
+							use_realpath == CWD_FILEPATH_NO_FOLLOW ? CWD_FILEPATH : use_realpath, is_dir, &directory);
 					if(j == (size_t)-1) {
 						free_alloca(tmp, use_heap);
 						FREE_PATHW()
@@ -863,7 +869,8 @@ retry_reparse_tag_cloud:
 				memmove(path+i, path, j+1);
 				memcpy(path, tmp, i-1);
 				path[i-1] = DEFAULT_SLASH;
-				j  = tsrm_realpath_r(path, start, i + j, ll, t, use_realpath, is_dir, &directory);
+				j  = tsrm_realpath_r(path, start, i + j, ll, t,
+						use_realpath == CWD_FILEPATH_NO_FOLLOW ? CWD_FILEPATH : use_realpath, is_dir, &directory);
 				if(j == (size_t)-1) {
 					free_alloca(tmp, use_heap);
 					FREE_PATHW()
@@ -899,7 +906,8 @@ retry_reparse_tag_cloud:
 		tmp = do_alloca(len+1, use_heap);
 		memcpy(tmp, path, len+1);
 
-		if (save && S_ISLNK(st.st_mode)) {
+		if (save && S_ISLNK(st.st_mode)
+				&& !(use_realpath == CWD_FILEPATH_NO_FOLLOW && is_final)) {
 			if (++(*ll) > LINK_MAX || (j = (size_t)php_sys_readlink(tmp, path, MAXPATHLEN)) == (size_t)-1) {
 				/* too many links or broken symlinks */
 				free_alloca(tmp, use_heap);
@@ -907,7 +915,8 @@ retry_reparse_tag_cloud:
 			}
 			path[j] = 0;
 			if (IS_ABSOLUTE_PATH(path, j)) {
-				j = tsrm_realpath_r(path, 1, j, ll, t, use_realpath, is_dir, &directory);
+				j = tsrm_realpath_r(path, 1, j, ll, t,
+						use_realpath == CWD_FILEPATH_NO_FOLLOW ? CWD_FILEPATH : use_realpath, is_dir, &directory);
 				if (j == (size_t)-1) {
 					free_alloca(tmp, use_heap);
 					return (size_t)-1;
@@ -920,7 +929,8 @@ retry_reparse_tag_cloud:
 				memmove(path+i, path, j+1);
 				memcpy(path, tmp, i-1);
 				path[i-1] = DEFAULT_SLASH;
-				j = tsrm_realpath_r(path, start, i + j, ll, t, use_realpath, is_dir, &directory);
+				j = tsrm_realpath_r(path, start, i + j, ll, t,
+						use_realpath == CWD_FILEPATH_NO_FOLLOW ? CWD_FILEPATH : use_realpath, is_dir, &directory);
 				if (j == (size_t)-1) {
 					free_alloca(tmp, use_heap);
 					return (size_t)-1;
@@ -946,8 +956,8 @@ retry_reparse_tag_cloud:
 				j = start;
 			} else {
 				/* some leading directories may be inaccessible */
-				j = tsrm_realpath_r(path, start, i-1, ll, t, save ? CWD_FILEPATH : use_realpath, true,
-						    NULL);
+				j = tsrm_realpath_r(path, start, i-1, ll, t,
+						(save || use_realpath == CWD_FILEPATH_NO_FOLLOW) ? CWD_FILEPATH : use_realpath, true, NULL);
 				if (j > start && j != (size_t)-1) {
 					path[j++] = DEFAULT_SLASH;
 				}
@@ -986,7 +996,8 @@ retry_reparse_tag_cloud:
 		}
 #endif
 
-		if (save && start && CWDG(realpath_cache_size_limit)) {
+		if (save && start && CWDG(realpath_cache_size_limit)
+				&& !(use_realpath == CWD_FILEPATH_NO_FOLLOW && is_final)) {
 			/* save absolute path in the cache */
 			realpath_cache_add(tmp, len, path, j, directory, *t);
 		}
@@ -1485,6 +1496,42 @@ CWD_API int virtual_open(const char *path, int flags, ...) /* {{{ */
 	return f;
 }
 /* }}} */
+
+CWD_API int virtual_open_nofollow(const char *path, int flags, ...)
+{
+	cwd_state new_state;
+	int f;
+
+	CWD_STATE_COPY(&new_state, &CWDG(cwd));
+	if (virtual_file_ex(&new_state, path, NULL, CWD_FILEPATH_NO_FOLLOW)) {
+		CWD_STATE_FREE_ERR(&new_state);
+		return -1;
+	}
+
+	if (flags & O_CREAT) {
+		mode_t mode;
+		va_list arg;
+
+		va_start(arg, flags);
+		mode = (mode_t) va_arg(arg, int);
+		va_end(arg);
+
+#ifdef ZEND_WIN32
+		f = php_win32_ioutil_open(new_state.cwd, flags, mode);
+#else
+		f = open(new_state.cwd, flags, mode);
+#endif
+	} else {
+#ifdef ZEND_WIN32
+		f = php_win32_ioutil_open(new_state.cwd, flags);
+#else
+		f = open(new_state.cwd, flags);
+#endif
+	}
+	CWD_STATE_FREE_ERR(&new_state);
+	return f;
+}
+
 
 CWD_API int virtual_creat(const char *path, mode_t mode) /* {{{ */
 {
