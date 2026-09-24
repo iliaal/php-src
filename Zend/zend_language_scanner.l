@@ -521,6 +521,12 @@ ZEND_API zend_result zend_multibyte_set_filter(const zend_encoding *onetime_enco
 	return SUCCESS;
 }
 
+static void zend_multibyte_pad_filtered_buffer(unsigned char **buf, size_t *len)
+{
+	*buf = safe_erealloc(*buf, 1, *len, ZEND_MMAP_AHEAD);
+	memset(*buf + *len, 0, ZEND_MMAP_AHEAD);
+}
+
 ZEND_API zend_result open_file_for_scanning(zend_file_handle *file_handle)
 {
 	char *buf;
@@ -555,6 +561,7 @@ ZEND_API zend_result open_file_for_scanning(zend_file_handle *file_handle)
 					zend_error_noreturn(E_COMPILE_ERROR, "Could not convert the script from the detected "
 							"encoding \"%s\" to a compatible encoding", zend_multibyte_get_encoding_name(LANG_SCNG(script_encoding)));
 				}
+				zend_multibyte_pad_filtered_buffer(&SCNG(script_filtered), &SCNG(script_filtered_size));
 				buf = (char*)SCNG(script_filtered);
 				size = SCNG(script_filtered_size);
 			}
@@ -746,6 +753,7 @@ ZEND_API void zend_prepare_string_for_scanning(zval *str, zend_string *filename)
 				zend_error_noreturn(E_COMPILE_ERROR, "Could not convert the script from the detected "
 						"encoding \"%s\" to a compatible encoding", zend_multibyte_get_encoding_name(LANG_SCNG(script_encoding)));
 			}
+			zend_multibyte_pad_filtered_buffer(&SCNG(script_filtered), &SCNG(script_filtered_size));
 			buf = (char*)SCNG(script_filtered);
 			size = SCNG(script_filtered_size);
 		}
@@ -880,6 +888,7 @@ ZEND_API void zend_multibyte_yyinput_again(zend_encoding_filter old_input_filter
 			zend_error_noreturn(E_COMPILE_ERROR, "Could not convert the script from the detected "
 					"encoding \"%s\" to a compatible encoding", zend_multibyte_get_encoding_name(LANG_SCNG(script_encoding)));
 		}
+		zend_multibyte_pad_filtered_buffer(&new_yy_start, &length);
 		if (SCNG(script_filtered)) {
 			efree(SCNG(script_filtered));
 		}
