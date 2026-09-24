@@ -91,6 +91,8 @@ PHP                                                                        NEWS
     (Ilia Alshanetsky)
 
 - Standard:
+  . Fixed getimagesize() failing to read JPEG APP metadata from user stream
+    wrappers that return short reads. (Ilia Alshanetsky)
   . Fixed three Windows-only proc_open() defects: an uninitialized
     PROCESS_INFORMATION, an indeterminate comspec pointer after a failed
     lookup, and an unchecked CreateFileA() failure. (Ilia Alshanetsky)
