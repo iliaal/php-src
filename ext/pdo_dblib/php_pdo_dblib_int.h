@@ -113,6 +113,7 @@ typedef struct {
 	char *dberrstr;
 	char *sqlstate;
 	char *lastmsg;
+	bool is_persistent;
 } pdo_dblib_err;
 
 void pdo_dblib_err_dtor(pdo_dblib_err *err);
