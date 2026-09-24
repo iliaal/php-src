@@ -397,14 +397,15 @@ static int php_skip_variable(php_stream * stream)
 static size_t php_read_stream_all_chunks(php_stream *stream, char *buffer, size_t length)
 {
 	size_t read_total = 0;
-	do {
+
+	while (read_total < length) {
 		ssize_t read_now = php_stream_read(stream, buffer, length - read_total);
-		read_total += read_now;
-		if (read_now < stream->chunk_size && read_total != length) {
+		if (read_now <= 0) {
 			return 0;
 		}
+		read_total += read_now;
 		buffer += read_now;
-	} while (read_total < length);
+	}
 
 	return read_total;
 }
