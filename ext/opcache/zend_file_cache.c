@@ -1832,9 +1832,12 @@ zend_persistent_script *zend_file_cache_script_load(zend_file_handle *file_handl
 	char *filename;
 	zend_persistent_script *script;
 	zend_file_cache_metainfo info;
+	zend_stat_t statbuf;
 	zend_accel_hash_entry *bucket;
 	void *mem, *checkpoint, *buf;
 	bool cache_it = true;
+	size_t mem_and_str_size;
+	size_t file_size;
 	unsigned int actual_checksum;
 	bool ok;
 
@@ -1882,6 +1885,46 @@ zend_persistent_script *zend_file_cache_script_load(zend_file_handle *file_handl
 		return NULL;
 	}
 
+	if (zend_fstat(fd, &statbuf) != 0 || statbuf.st_size < 0
+	 || (uint64_t)statbuf.st_size > SIZE_MAX
+	 || (size_t)statbuf.st_size < sizeof(info)) {
+		zend_accel_error(ACCEL_LOG_WARNING, "opcache cannot read from file '%s' (corrupted metadata)\n", filename);
+		zend_file_cache_flock(fd, LOCK_UN);
+		close(fd);
+		zend_file_cache_unlink(filename);
+		efree(filename);
+		return NULL;
+	}
+	file_size = (size_t)statbuf.st_size;
+
+	if (info.mem_size < sizeof(zend_persistent_script)
+	 || info.str_size > ZEND_SIZE_MAX - info.mem_size) {
+		zend_accel_error(ACCEL_LOG_WARNING, "opcache cannot read from file '%s' (corrupted metadata)\n", filename);
+		zend_file_cache_flock(fd, LOCK_UN);
+		close(fd);
+		zend_file_cache_unlink(filename);
+		efree(filename);
+		return NULL;
+	}
+	mem_and_str_size = info.mem_size + info.str_size;
+	if (mem_and_str_size > file_size - sizeof(info)
+	 || info.script_offset > info.mem_size - sizeof(zend_persistent_script)) {
+		zend_accel_error(ACCEL_LOG_WARNING, "opcache cannot read from file '%s' (corrupted metadata)\n", filename);
+		zend_file_cache_flock(fd, LOCK_UN);
+		close(fd);
+		zend_file_cache_unlink(filename);
+		efree(filename);
+		return NULL;
+	}
+	if (mem_and_str_size > ZEND_SIZE_MAX - 64) {
+		zend_accel_error(ACCEL_LOG_WARNING, "opcache cannot read from file '%s' (corrupted metadata)\n", filename);
+		zend_file_cache_flock(fd, LOCK_UN);
+		close(fd);
+		zend_file_cache_unlink(filename);
+		efree(filename);
+		return NULL;
+	}
+
 	/* verify timestamp */
 	if (ZCG(accel_directives).validate_timestamps &&
 	    zend_get_file_handle_timestamp(file_handle, NULL) != info.timestamp) {
@@ -1897,13 +1940,13 @@ zend_persistent_script *zend_file_cache_script_load(zend_file_handle *file_handl
 	checkpoint = zend_arena_checkpoint(CG(arena));
 #if defined(__AVX__) || defined(__SSE2__)
 	/* Align to 64-byte boundary */
-	mem = zend_arena_alloc(&CG(arena), info.mem_size + info.str_size + 64);
+	mem = zend_arena_alloc(&CG(arena), mem_and_str_size + 64);
 	mem = (void*)(((uintptr_t)mem + 63L) & ~63L);
 #else
-	mem = zend_arena_alloc(&CG(arena), info.mem_size + info.str_size);
+	mem = zend_arena_alloc(&CG(arena), mem_and_str_size);
 #endif
 
-	if (read(fd, mem, info.mem_size + info.str_size) != (ssize_t)(info.mem_size + info.str_size)) {
+	if (read(fd, mem, mem_and_str_size) != (ssize_t)mem_and_str_size) {
 		zend_accel_error(ACCEL_LOG_WARNING, "opcache cannot read from file '%s' (mem)\n", filename);
 		zend_file_cache_flock(fd, LOCK_UN);
 		close(fd);
@@ -1919,7 +1962,7 @@ zend_persistent_script *zend_file_cache_script_load(zend_file_handle *file_handl
 
 	/* verify checksum */
 	if (ZCG(accel_directives).file_cache_consistency_checks &&
-	    (actual_checksum = zend_adler32(ADLER32_INIT, mem, info.mem_size + info.str_size)) != info.checksum) {
+	    (actual_checksum = zend_adler32(ADLER32_INIT, mem, mem_and_str_size)) != info.checksum) {
 		zend_accel_error(ACCEL_LOG_WARNING, "corrupted file '%s' excepted checksum: 0x%08x actual checksum: 0x%08x\n", filename, info.checksum, actual_checksum);
 		zend_file_cache_unlink(filename);
 		zend_arena_release(&CG(arena), checkpoint);
