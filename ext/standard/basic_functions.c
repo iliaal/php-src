@@ -941,7 +941,7 @@ PHP_FUNCTION(getopt)
 	zval *zoptind = NULL;
 	size_t optname_len = 0;
 	opt_struct *opts, *orig_opts;
-
+	zend_array *argv_values = NULL;
 	ZEND_PARSE_PARAMETERS_START(1, 3)
 		Z_PARAM_STRING(options, options_len)
 		Z_PARAM_OPTIONAL
@@ -968,13 +968,14 @@ PHP_FUNCTION(getopt)
 			RETURN_FALSE;
 		}
 		argc = zend_hash_num_elements(Z_ARRVAL_P(args));
+		argv_values = zend_array_dup(Z_ARRVAL_P(args));
 
 		/* Attempt to allocate enough memory to hold all of the arguments
 		 * and a trailing NULL */
 		argv = (char **) safe_emalloc(sizeof(char *), (argc + 1), 0);
 
 		/* Iterate over the hash to construct the argv array. */
-		ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(args), entry) {
+		ZEND_HASH_FOREACH_VAL(argv_values, entry) {
 			zend_string *tmp_arg_str;
 			zend_string *arg_str = zval_get_tmp_string(entry, &tmp_arg_str);
 
@@ -1105,6 +1106,7 @@ PHP_FUNCTION(getopt)
 	free_longopts(orig_opts);
 	efree(orig_opts);
 	free_argv(argv, argc);
+	zend_array_destroy(argv_values);
 }
 /* }}} */
 
