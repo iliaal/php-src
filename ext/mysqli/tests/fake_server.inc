@@ -630,6 +630,37 @@ class my_mysqli_fake_server_conn
         fprintf(STDERR, "[*] Received: %s\n", bin2hex($data));
     }
 
+    public function read_packet(): ?string
+    {
+        $header = fread($this->conn, 4);
+        if ($header === false || $header === '') {
+            return null;
+        }
+        while (strlen($header) < 4) {
+            $chunk = fread($this->conn, 4 - strlen($header));
+            if ($chunk === false || $chunk === '') {
+                return null;
+            }
+            $header .= $chunk;
+        }
+        $packet_length = ord($header[0]) | (ord($header[1]) << 8) | (ord($header[2]) << 16);
+        $packet = $header;
+        while (strlen($packet) < 4 + $packet_length) {
+            $chunk = fread($this->conn, 4 + $packet_length - strlen($packet));
+            if ($chunk === false || $chunk === '') {
+                return null;
+            }
+            $packet .= $chunk;
+        }
+        fprintf(STDERR, "[*] Received: %s\n", bin2hex($packet));
+        return $packet;
+    }
+
+    public function set_read_timeout(int $seconds): void
+    {
+        stream_set_timeout($this->conn, $seconds);
+    }
+
     public function close()
     {
         fclose($this->conn);
@@ -763,6 +794,31 @@ function my_mysqli_test_auth_response_message_over_read(my_mysqli_fake_server_co
     $conn->read();
     $conn->send($p->to_bytes(), "Malicious OK Auth Response [Extract heap through buffer over-read]");
     $conn->read();
+}
+
+function my_mysqli_test_local_infile_read_error(my_mysqli_fake_server_conn $conn): void
+{
+    $filename = 'aphml://test';
+    $request = new my_mysqli_fake_packet();
+    $request->packet_length = '0000';
+    $request->packet_number = '01';
+    $request->field_count = 'fb';
+    $request->filename = my_mysqli_fake_packet_generator::create_packet_item($filename);
+    $request->packet_length = sprintf('%02x0000', strlen($request->to_bytes()) - 4);
+
+    $conn->send_server_greetings();
+    $conn->read_packets(1);
+    $conn->send_server_ok();
+    $conn->read_packets(1);
+    $conn->send($request->to_bytes(), 'LOAD DATA LOCAL INFILE request');
+    $conn->read_packets(1);
+    $conn->set_read_timeout(1);
+    $packet = $conn->read_packet();
+    if ($packet === null) {
+        fprintf(STDERR, "[*] LOAD DATA aborted without EOF\n");
+    } else {
+        fprintf(STDERR, "[*] Unexpected packet after data: %s\n", bin2hex($packet));
+    }
 }
 
 function my_mysqli_test_stmt_response_row_over_read_string(my_mysqli_fake_server_conn $conn): void
