@@ -882,6 +882,28 @@ function my_mysqli_test_stmt_response_row_over_read_bit(my_mysqli_fake_server_co
 {
     my_mysqli_test_stmt_response_row_over_read_two_fields($conn, 'bitval');
 }
+function my_mysqli_test_stmt_response_row_short_null_bitmap(my_mysqli_fake_server_conn $conn): void
+{
+    $rh = $conn->packet_generator->server_stmt_execute_data_response('strval');
+    $rh[4]->packet_length = '010000';
+    $rh[4]->affected_rows = '';
+    $rh[4]->row_field1_len = '';
+    $rh[4]->row_field1_data = '';
+    $rh[4]->row_field2 = '';
+
+    $conn->send_server_greetings();
+    $conn->read();
+    $conn->send_server_ok();
+    $conn->read();
+    $conn->send_server_stmt_prepare_data_response('strval');
+    $conn->read();
+    $conn->send(
+        $conn->packets_to_bytes($rh),
+        "Malicious Stmt Response for data strval [null bitmap too short]"
+    );
+    $conn->read(65536);
+}
+
 
 function my_mysqli_test_stmt_response_row_read_two_fields(my_mysqli_fake_server_conn $conn): void
 {
