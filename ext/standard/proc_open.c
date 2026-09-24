@@ -1403,6 +1403,8 @@ PHP_FUNCTION(proc_open)
 		r = posix_spawn_file_actions_addchdir_np(&factions, cwd);
 		if (r != 0) {
 			php_error_docref(NULL, E_WARNING, "posix_spawn_file_actions_addchdir_np() failed: %s", strerror(r));
+			posix_spawn_file_actions_destroy(&factions);
+			goto exit_fail;
 		}
 	}
 
