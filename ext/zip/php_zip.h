@@ -53,6 +53,7 @@ typedef struct _ze_zip_rsrc {
 	struct zip *za;
 	zip_uint64_t index_current;
 	zip_int64_t num_files;
+	uint32_t refcount;
 } zip_rsrc;
 
 typedef zip_rsrc * zip_rsrc_ptr;
@@ -60,9 +61,7 @@ typedef zip_rsrc * zip_rsrc_ptr;
 typedef struct _ze_zip_read_rsrc {
 	struct zip_file *zf;
 	struct zip_stat sb;
-	/* Used to check if the zip resource still exists,
-	 * without holding a reference. This works because the IDs are unique. */
-	zend_long zip_rsrc_handle;
+	zval parent;
 } zip_read_rsrc;
 
 /* Refcounted holder for the native archive state.
