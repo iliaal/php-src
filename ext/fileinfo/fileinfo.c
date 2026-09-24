@@ -40,6 +40,7 @@
 typedef struct _php_fileinfo {
 	zend_long options;
 	struct magic_set *magic;
+	uint32_t refcount;
 } php_fileinfo;
 
 static zend_object_handlers finfo_object_handlers;
@@ -66,14 +67,21 @@ static inline finfo_object *php_finfo_fetch_object(zend_object *obj) {
 	} \
 }
 
+static void finfo_release(php_fileinfo *finfo)
+{
+	if (--finfo->refcount == 0) {
+		magic_close(finfo->magic);
+		efree(finfo);
+	}
+}
+
 /* {{{ finfo_objects_free */
 static void finfo_objects_free(zend_object *object)
 {
 	finfo_object *intern = php_finfo_fetch_object(object);
 
 	if (intern->ptr) {
-		magic_close(intern->ptr->magic);
-		efree(intern->ptr);
+		finfo_release(intern->ptr);
 	}
 
 	zend_object_std_dtor(&intern->zo);
@@ -176,9 +184,9 @@ PHP_FUNCTION(finfo_open)
 		zend_replace_error_handling(EH_THROW, NULL, &zeh);
 
 		if (finfo_obj->ptr) {
-			magic_close(finfo_obj->ptr->magic);
-			efree(finfo_obj->ptr);
+			php_fileinfo *old_finfo = finfo_obj->ptr;
 			finfo_obj->ptr = NULL;
+			finfo_release(old_finfo);
 		}
 	}
 
@@ -208,6 +216,7 @@ PHP_FUNCTION(finfo_open)
 	}
 
 	finfo = emalloc(sizeof(php_fileinfo));
+	finfo->refcount = 1;
 
 	finfo->options = options;
 	finfo->magic = magic_open(options);
@@ -297,7 +306,7 @@ static void _php_finfo_get_type(INTERNAL_FUNCTION_PARAMETERS, int mode, int mime
 	zval *what;
 	char mime_directory[] = "directory";
 	struct magic_set *magic = NULL;
-
+	php_fileinfo *active_finfo = NULL;
 	if (mimetype_emu) {
 
 		/* mime_content_type(..) emulation */
@@ -398,6 +407,10 @@ static void _php_finfo_get_type(INTERNAL_FUNCTION_PARAMETERS, int mode, int mime
 					}
 				}
 #endif
+				if (finfo) {
+					active_finfo = finfo;
+					active_finfo->refcount++;
+				}
 
 				stream = php_stream_open_wrapper_ex(buffer, "rb", REPORT_ERRORS, NULL, context);
 
@@ -434,9 +447,17 @@ clean:
 		magic_close(magic);
 	}
 
-	/* Restore options */
-	if (options) {
-		FINFO_SET_OPTION(magic, finfo->options)
+	if (options && magic_setflags(magic, finfo->options) == -1) {
+		php_error_docref(NULL, E_WARNING, "Failed to set option '" ZEND_LONG_FMT "' %d:%s",
+				finfo->options, magic_errno(magic), magic_error(magic));
+		if (active_finfo) {
+			finfo_release(active_finfo);
+		}
+		RETURN_FALSE;
+	}
+
+	if (active_finfo) {
+		finfo_release(active_finfo);
 	}
 	return;
 }
