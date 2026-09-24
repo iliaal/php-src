@@ -194,10 +194,11 @@ PHP_FUNCTION(net_get_interfaces) {
 		array_init(&iface);
 
 		if (p->Description) {
-			char tmp[256];
-			memset(tmp, 0, sizeof(tmp));
-			wcstombs(tmp, p->Description, sizeof(tmp));
-			add_assoc_string(&iface, "description", tmp);
+			char *description = php_win32_ioutil_w_to_any(p->Description);
+			if (description) {
+				add_assoc_string(&iface, "description", description);
+				free(description);
+			}
 		}
 
 		if (p->PhysicalAddressLength > 0) {
