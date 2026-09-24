@@ -241,11 +241,13 @@ ZEND_API void zend_llist_apply_with_argument(zend_llist *l, llist_apply_with_arg
 ZEND_API void zend_llist_apply_with_arguments(zend_llist *l, llist_apply_with_args_func_t func, int num_args, ...)
 {
 	zend_llist_element *element;
-	va_list args;
+	va_list args, callback_args;
 
 	va_start(args, num_args);
 	for (element=l->head; element; element=element->next) {
-		func(element->data, num_args, args);
+		va_copy(callback_args, args);
+		func(element->data, num_args, callback_args);
+		va_end(callback_args);
 	}
 	va_end(args);
 }
