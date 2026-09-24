@@ -54,6 +54,32 @@ static void mysqlnd_result_free_prev_data(MYSQLND_RES *result)
 	}
 }
 
+static void
+mysqlnd_stmt_reset_after_result_error(MYSQLND_STMT *s)
+{
+	MYSQLND_STMT_DATA *stmt = s->data;
+
+	s->m->free_stmt_content(s);
+	zval_ptr_dtor(&stmt->execute_read_cb);
+	zval_ptr_dtor(&stmt->execute_err_cb);
+
+	stmt->stmt_id = 0;
+	stmt->flags = 0;
+	stmt->state = MYSQLND_STMT_INITTED;
+	stmt->result = NULL;
+	stmt->field_count = 0;
+	stmt->param_count = 0;
+	stmt->send_types_to_server = 0;
+	stmt->update_max_length = false;
+	stmt->cursor_exists = false;
+	stmt->default_rset_handler = NULL;
+	ZVAL_UNDEF(&stmt->execute_read_cb);
+	ZVAL_UNDEF(&stmt->execute_err_cb);
+	stmt->in_execute_read_cb = false;
+	stmt->in_execute_err_cb = false;
+	stmt->execute_count = 0;
+}
+
 /* {{{ mysqlnd_result_buffered::free_result */
 static void
 MYSQLND_METHOD(mysqlnd_result_buffered, free_result)(MYSQLND_RES_BUFFERED * const set)
@@ -316,13 +342,7 @@ mysqlnd_query_read_result_set_header(MYSQLND_CONN_DATA * conn, MYSQLND_STMT * s)
 						conn->current_result = NULL;
 					} else {
 						stmt->result = NULL;
-						/* XXX: This will crash, because we will null also the methods.
-							But seems it happens in extreme cases or doesn't. Should be fixed by exporting a function
-							(from mysqlnd_driver.c?) to do the reset.
-							This is done also in mysqlnd_ps.c
-						*/
-						memset(stmt, 0, sizeof(*stmt));
-						stmt->state = MYSQLND_STMT_INITTED;
+						mysqlnd_stmt_reset_after_result_error(s);
 					}
 				} else {
 					DBG_INF_FMT("warnings=%u server_status=%u", fields_eof.warning_count, fields_eof.server_status);
