@@ -19,6 +19,7 @@
 #include "zlog.h"
 
 static int sp[2];
+static volatile sig_atomic_t fpm_soft_quit_fd = -1;
 static sigset_t block_sigset;
 static sigset_t child_block_sigset;
 
@@ -144,10 +145,8 @@ static void sig_soft_quit(int signo) /* {{{ */
 	int saved_errno = errno;
 
 	/* closing fastcgi listening socket will force fcgi_accept() exit immediately */
-	close(fpm_globals.listening_socket);
-	if (0 > socket(AF_UNIX, SOCK_STREAM, 0)) {
-		zlog(ZLOG_WARNING, "failed to create a new socket");
-	}
+	close(fpm_soft_quit_fd);
+	fpm_soft_quit_fd = -1;
 	fpm_php_soft_quit();
 	errno = saved_errno;
 }
@@ -226,6 +225,8 @@ int fpm_signals_init_main(void)
 int fpm_signals_init_child(void)
 {
 	struct sigaction act, act_dfl;
+
+	fpm_soft_quit_fd = fpm_globals.listening_socket;
 
 	memset(&act, 0, sizeof(act));
 	memset(&act_dfl, 0, sizeof(act_dfl));
