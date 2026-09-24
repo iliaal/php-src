@@ -564,6 +564,53 @@ static inline void fetch_value(pdo_stmt_t *stmt, zval *dest, int colno, enum pdo
 	}
 }
 /* }}} */
+static void pdo_stmt_fetch_bound_columns(pdo_stmt_t *stmt)
+{
+	struct pdo_bound_param_data *param;
+	zval *old_values;
+	size_t old_value_count;
+	size_t capacity = stmt->bound_columns->nNumUsed;
+
+	old_values = safe_emalloc(capacity, sizeof(zval), 0);
+	old_value_count = 0;
+
+	ZEND_HASH_FOREACH_PTR(stmt->bound_columns, param) {
+		if (param->paramno >= 0 && Z_ISREF(param->parameter)) {
+			ZVAL_COPY_VALUE(&old_values[old_value_count++], Z_REFVAL(param->parameter));
+			ZVAL_UNDEF(Z_REFVAL(param->parameter));
+		}
+	} ZEND_HASH_FOREACH_END();
+
+	for (size_t i = 0; i < old_value_count; i++) {
+		zval_ptr_dtor(&old_values[i]);
+	}
+
+	if (stmt->bound_columns) {
+		if (capacity < stmt->bound_columns->nNumUsed) {
+			old_values = safe_erealloc(old_values, stmt->bound_columns->nNumUsed, sizeof(zval), 0);
+		}
+		old_value_count = 0;
+
+		ZEND_HASH_FOREACH_PTR(stmt->bound_columns, param) {
+			if (param->paramno >= 0 && Z_ISREF(param->parameter)) {
+				ZVAL_COPY_VALUE(&old_values[old_value_count++], Z_REFVAL(param->parameter));
+				ZVAL_UNDEF(Z_REFVAL(param->parameter));
+			}
+		} ZEND_HASH_FOREACH_END();
+
+		ZEND_HASH_FOREACH_PTR(stmt->bound_columns, param) {
+			if (param->paramno >= 0 && Z_ISREF(param->parameter)) {
+				fetch_value(stmt, Z_REFVAL(param->parameter), param->paramno, &param->param_type);
+			}
+		} ZEND_HASH_FOREACH_END();
+
+		for (size_t i = 0; i < old_value_count; i++) {
+			zval_ptr_dtor(&old_values[i]);
+		}
+	}
+
+	efree(old_values);
+}
 
 static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, zend_long offset) /* {{{ */
 {
@@ -589,27 +636,7 @@ static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, ze
 	}
 
 	if (stmt->bound_columns) {
-		/* update those bound column variables now */
-		struct pdo_bound_param_data *param;
-
-		ZEND_HASH_FOREACH_PTR(stmt->bound_columns, param) {
-			if (param->paramno >= 0) {
-				if (!Z_ISREF(param->parameter)) {
-					continue;
-				}
-
-				/* delete old value */
-				zval_ptr_dtor(Z_REFVAL(param->parameter));
-
-				/* set new value */
-				fetch_value(stmt, Z_REFVAL(param->parameter), param->paramno, &param->param_type);
-
-				/* TODO: some smart thing that avoids duplicating the value in the
-				 * general loop below.  For now, if you're binding output columns,
-				 * it's better to use LAZY or BOUND fetches if you want to shave
-				 * off those cycles */
-			}
-		} ZEND_HASH_FOREACH_END();
+		pdo_stmt_fetch_bound_columns(stmt);
 	}
 
 	return 1;
