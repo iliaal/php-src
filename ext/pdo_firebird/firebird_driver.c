@@ -598,36 +598,38 @@ static void firebird_handle_closer(pdo_dbh_t *dbh) /* {{{ */
 {
 	pdo_firebird_db_handle *H = (pdo_firebird_db_handle *)dbh->driver_data;
 
-	if (H->tr) {
-		if (dbh->auto_commit) {
-			php_firebird_commit_transaction(dbh, /* retain */ false);
-		} else {
-			php_firebird_rollback_transaction(dbh);
+	if (H) {
+		if (H->tr) {
+			if (dbh->auto_commit) {
+				php_firebird_commit_transaction(dbh, false);
+			} else {
+				php_firebird_rollback_transaction(dbh);
+			}
 		}
-	}
-	H->in_manually_txn = 0;
+		H->in_manually_txn = 0;
 
-	/* isc_detach_database returns 0 on success, 1 on failure. */
-	if (H->db && isc_detach_database(H->isc_status, &H->db)) {
-		php_firebird_error(dbh);
-	}
+		if (H->db && isc_detach_database(H->isc_status, &H->db)) {
+			php_firebird_error(dbh);
+		}
 
-	if (H->date_format) {
-		pefree(H->date_format, dbh->is_persistent);
-	}
-	if (H->time_format) {
-		pefree(H->time_format, dbh->is_persistent);
-	}
-	if (H->timestamp_format) {
-		pefree(H->timestamp_format, dbh->is_persistent);
-	}
+		if (H->date_format) {
+			pefree(H->date_format, dbh->is_persistent);
+		}
+		if (H->time_format) {
+			pefree(H->time_format, dbh->is_persistent);
+		}
+		if (H->timestamp_format) {
+			pefree(H->timestamp_format, dbh->is_persistent);
+		}
 
-	if (H->einfo.errmsg) {
-		pefree(H->einfo.errmsg, dbh->is_persistent);
-		H->einfo.errmsg = NULL;
-	}
+		if (H->einfo.errmsg) {
+			pefree(H->einfo.errmsg, dbh->is_persistent);
+			H->einfo.errmsg = NULL;
+		}
 
-	pefree(H, dbh->is_persistent);
+		dbh->driver_data = NULL;
+		pefree(H, dbh->is_persistent);
+	}
 }
 /* }}} */
 
