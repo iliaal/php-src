@@ -501,8 +501,7 @@ typedef struct _descriptorspec_item {
 	descriptor_type type;
 	php_file_descriptor_t childend;  /* FD # opened for use in child
 	                                  * (will be copied to `index` in child) */
-	php_file_descriptor_t parentend; /* FD # opened for use in parent
-	                                  * (for pipes only; will be 0 otherwise) */
+	php_file_descriptor_t parentend;
 	int mode_flags;                  /* mode for opening FDs: r/o, r/w, binary (on Win32), etc */
 } descriptorspec_item;
 
@@ -811,7 +810,14 @@ static zend_string* get_command_from_array(HashTable *array, char ***argv, int n
 static descriptorspec_item* alloc_descriptor_array(HashTable *descriptorspec)
 {
 	uint32_t ndescriptors = zend_hash_num_elements(descriptorspec);
-	return ecalloc(ndescriptors, sizeof(descriptorspec_item));
+	descriptorspec_item *descriptors = ecalloc(ndescriptors, sizeof(descriptorspec_item));
+
+	for (uint32_t i = 0; i < ndescriptors; i++) {
+		descriptors[i].childend = PHP_INVALID_FD;
+		descriptors[i].parentend = PHP_INVALID_FD;
+	}
+
+	return descriptors;
 }
 
 static zend_string* get_string_parameter(zval *array, int index, char *param_name)
@@ -1171,9 +1177,12 @@ static zend_result close_parentends_of_pipes(descriptorspec_item *descriptors, i
 static void close_all_descriptors(descriptorspec_item *descriptors, int ndesc)
 {
 	for (int i = 0; i < ndesc; i++) {
-		close_descriptor(descriptors[i].childend);
-		if (descriptors[i].parentend)
+		if (descriptors[i].childend != PHP_INVALID_FD) {
+			close_descriptor(descriptors[i].childend);
+		}
+		if (descriptors[i].parentend != PHP_INVALID_FD) {
 			close_descriptor(descriptors[i].parentend);
+		}
 	}
 }
 
