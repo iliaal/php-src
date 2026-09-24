@@ -1206,6 +1206,11 @@ static void php_zip_free_dir(zend_resource *rsrc)
 	zip_rsrc * zip_int = (zip_rsrc *) rsrc->ptr;
 
 	if (zip_int) {
+		ZEND_ASSERT(zip_int->refcount > 0);
+		if (--zip_int->refcount != 0) {
+			return;
+		}
+
 		if (zip_int->za) {
 			if (zip_close(zip_int->za) != 0) {
 				php_error_docref(NULL, E_WARNING, "Cannot destroy the zip context");
@@ -1226,10 +1231,16 @@ static void php_zip_free_entry(zend_resource *rsrc)
 	zip_read_rsrc *zr_rsrc = (zip_read_rsrc *) rsrc->ptr;
 
 	if (zr_rsrc) {
+		zend_resource *parent = Z_RES_P(&zr_rsrc->parent);
+
 		if (zr_rsrc->zf) {
 			zip_fclose(zr_rsrc->zf);
 			zr_rsrc->zf = NULL;
 		}
+		if (parent->type < 0) {
+			php_zip_free_dir(parent);
+		}
+		zval_ptr_dtor(&zr_rsrc->parent);
 		efree(zr_rsrc);
 		rsrc->ptr = NULL;
 	}
@@ -1308,6 +1319,7 @@ PHP_FUNCTION(zip_open)
 
 	rsrc_int->index_current = 0;
 	rsrc_int->num_files = zip_get_num_entries(rsrc_int->za, 0);
+	rsrc_int->refcount = 1;
 
 	RETURN_RES(zend_register_resource(rsrc_int, le_zip_dir));
 }
@@ -1354,6 +1366,7 @@ PHP_FUNCTION(zip_read)
 		}
 
 		zr_rsrc = emalloc(sizeof(zip_read_rsrc));
+		ZVAL_UNDEF(&zr_rsrc->parent);
 
 		ret = zip_stat_index(rsrc_int->za, rsrc_int->index_current, 0, &zr_rsrc->sb);
 
@@ -1362,9 +1375,10 @@ PHP_FUNCTION(zip_read)
 			RETURN_FALSE;
 		}
 
-		zr_rsrc->zip_rsrc_handle = Z_RES_P(zip_dp)->handle;
 		zr_rsrc->zf = zip_fopen_index(rsrc_int->za, rsrc_int->index_current, 0);
 		if (zr_rsrc->zf) {
+			ZVAL_COPY(&zr_rsrc->parent, zip_dp);
+			rsrc_int->refcount++;
 			rsrc_int->index_current++;
 			RETURN_RES(zend_register_resource(zr_rsrc, le_zip_entry));
 		} else {
@@ -1478,7 +1492,7 @@ static void php_zip_entry_get_info(INTERNAL_FUNCTION_PARAMETERS, int opt) /* {{{
 		RETURN_THROWS();
 	}
 
-	if (!zr_rsrc->zf || !zend_hash_index_exists(&EG(regular_list), zr_rsrc->zip_rsrc_handle)) {
+	if (!zr_rsrc->zf) {
 		RETURN_FALSE;
 	}
 
