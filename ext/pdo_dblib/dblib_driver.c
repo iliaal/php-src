@@ -499,6 +499,7 @@ static int pdo_dblib_handle_factory(pdo_dbh_t *dbh, zval *driver_options)
 	H = pecalloc(1, sizeof(*H), dbh->is_persistent);
 	H->login = dblogin();
 	H->err.sqlstate = dbh->error_code;
+	H->err.is_persistent = dbh->is_persistent;
 	H->assume_national_character_set_strings = 0;
 	H->stringify_uniqueidentifier = 0;
 	H->skip_empty_rowsets = 0;

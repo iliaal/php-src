@@ -83,31 +83,35 @@ int pdo_dblib_error_handler(DBPROCESS *dbproc, int severity, int dberr,
 {
 	pdo_dblib_err *einfo;
 	char *state = "HY000";
+	bool is_persistent = false;
 
 	if(dbproc) {
 		einfo = (pdo_dblib_err*)dbgetuserdata(dbproc);
-		if (!einfo) einfo = &DBLIB_G(err);
+		if (!einfo) {
+			einfo = &DBLIB_G(err);
+		}
 	} else {
 		einfo = &DBLIB_G(err);
 	}
+	is_persistent = einfo->is_persistent;
 
 	einfo->severity = severity;
 	einfo->oserr = oserr;
 	einfo->dberr = dberr;
 
 	if (einfo->oserrstr) {
-		efree(einfo->oserrstr);
+		pefree(einfo->oserrstr, is_persistent);
 	}
 	if (einfo->dberrstr) {
-		efree(einfo->dberrstr);
+		pefree(einfo->dberrstr, is_persistent);
 	}
 	if (oserrstr) {
-		einfo->oserrstr = estrdup(oserrstr);
+		einfo->oserrstr = pestrdup(oserrstr, is_persistent);
 	} else {
 		einfo->oserrstr = NULL;
 	}
 	if (dberrstr) {
-		einfo->dberrstr = estrdup(dberrstr);
+		einfo->dberrstr = pestrdup(dberrstr, is_persistent);
 	} else {
 		einfo->dberrstr = NULL;
 	}
@@ -127,6 +131,7 @@ int pdo_dblib_msg_handler(DBPROCESS *dbproc, DBINT msgno, int msgstate,
 	int severity, char *msgtext, char *srvname, char *procname, int line)
 {
 	pdo_dblib_err *einfo;
+	bool is_persistent;
 
 	if (severity) {
 		einfo = (pdo_dblib_err*)dbgetuserdata(dbproc);
@@ -134,11 +139,13 @@ int pdo_dblib_msg_handler(DBPROCESS *dbproc, DBINT msgno, int msgstate,
 			einfo = &DBLIB_G(err);
 		}
 
+		is_persistent = einfo->is_persistent;
+
 		if (einfo->lastmsg) {
-			efree(einfo->lastmsg);
+			pefree(einfo->lastmsg, is_persistent);
 		}
 
-		einfo->lastmsg = estrdup(msgtext);
+		einfo->lastmsg = pestrdup(msgtext, is_persistent);
 	}
 
 	return 0;
@@ -151,15 +158,15 @@ void pdo_dblib_err_dtor(pdo_dblib_err *err)
 	}
 
 	if (err->dberrstr) {
-		efree(err->dberrstr);
+		pefree(err->dberrstr, err->is_persistent);
 		err->dberrstr = NULL;
 	}
 	if (err->lastmsg) {
-		efree(err->lastmsg);
+		pefree(err->lastmsg, err->is_persistent);
 		err->lastmsg = NULL;
 	}
 	if (err->oserrstr) {
-		efree(err->oserrstr);
+		pefree(err->oserrstr, err->is_persistent);
 		err->oserrstr = NULL;
 	}
 }
