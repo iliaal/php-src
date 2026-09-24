@@ -199,6 +199,8 @@ PHP                                                                        NEWS
     (Ilia Alshanetsky)
 
 - Standard:
+  . Fixed getimagesize() failing on JPEG APP segments and TIFF directories
+    read from streams that return short reads. (Ilia Alshanetsky)
   . Fixed sha1_file() returning a digest for incomplete data after a stream
     read failure. (Ilia Alshanetsky)
   . Fixed iptcembed() corrupting JPEG headers when called recursively from an
