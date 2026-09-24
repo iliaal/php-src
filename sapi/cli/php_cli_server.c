@@ -1101,6 +1101,8 @@ static int php_cli_server_content_sender_send(php_cli_server_content_sender *sen
 			} else {
 				chunk->data.heap.p += nbytes_sent;
 				chunk->data.heap.len -= nbytes_sent;
+				*nbytes_sent_total = _nbytes_sent_total + nbytes_sent;
+				return 0;
 			}
 			_nbytes_sent_total += nbytes_sent;
 			break;
@@ -1128,6 +1130,8 @@ static int php_cli_server_content_sender_send(php_cli_server_content_sender *sen
 			} else {
 				chunk->data.immortal.p += nbytes_sent;
 				chunk->data.immortal.len -= nbytes_sent;
+				*nbytes_sent_total = _nbytes_sent_total + nbytes_sent;
+				return 0;
 			}
 			_nbytes_sent_total += nbytes_sent;
 			break;
