@@ -91,6 +91,8 @@ PHP                                                                        NEWS
     (Ilia Alshanetsky)
 
 - Standard:
+  . Fixed file_put_contents() with LOCK_EX returning a successful byte count
+    when the target stream could not be truncated. (Ilia Alshanetsky)
   . Fixed three Windows-only proc_open() defects: an uninitialized
     PROCESS_INFORMATION, an indeterminate comspec pointer after a failed
     lookup, and an unchecked CreateFileA() failure. (Ilia Alshanetsky)
