@@ -501,6 +501,11 @@ static inline bool fetch_value(pdo_stmt_t *stmt, zval *dest, int colno, enum pdo
 
 	ZVAL_NULL(dest);
 	if (!stmt->methods->get_col(stmt, colno, dest, type_override)) {
+		zval_ptr_dtor(dest);
+		ZVAL_NULL(dest);
+		if (!strcmp(stmt->error_code, PDO_ERR_NONE)) {
+			pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "failed to fetch column");
+		}
 		return false;
 	}
 
@@ -568,7 +573,7 @@ static inline bool fetch_value(pdo_stmt_t *stmt, zval *dest, int colno, enum pdo
 }
 /* }}} */
 
-static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, zend_long offset) /* {{{ */
+static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, zend_long offset, bool *fetch_failed) /* {{{ */
 {
 	if (!stmt->executed) {
 		return 0;
@@ -588,6 +593,9 @@ static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, ze
 	}
 
 	if (!dispatch_param_event(stmt, PDO_PARAM_EVT_FETCH_POST)) {
+		if (fetch_failed) {
+			*fetch_failed = true;
+		}
 		return 0;
 	}
 
@@ -606,6 +614,9 @@ static bool do_fetch_common(pdo_stmt_t *stmt, enum pdo_fetch_orientation ori, ze
 
 				/* set new value */
 				if (!fetch_value(stmt, Z_REFVAL(param->parameter), param->paramno, &param->param_type)) {
+					if (fetch_failed) {
+						*fetch_failed = true;
+					}
 					return 0;
 				}
 
@@ -718,10 +729,19 @@ static void do_fetch_opt_finish(pdo_stmt_t *stmt, int free_ctor_agrs) /* {{{ */
 	}
 }
 /* }}} */
+static inline void restore_classtype_state(
+		pdo_stmt_t *stmt, zend_class_entry *old_ce, zval *old_ctor_args, int old_arg_count)
+{
+	do_fetch_opt_finish(stmt, 0);
+	stmt->fetch.cls.ce = old_ce;
+	ZVAL_COPY_VALUE(&stmt->fetch.cls.ctor_args, old_ctor_args);
+	stmt->fetch.cls.fci.param_count = old_arg_count;
+}
+
 
 /* perform a fetch.
  * Stores values into return_value according to HOW. */
-static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type how, enum pdo_fetch_orientation ori, zend_long offset, zval *return_all) /* {{{ */
+static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type how, enum pdo_fetch_orientation ori, zend_long offset, zval *return_all, bool *fetch_failed) /* {{{ */
 {
 	int flags, idx, old_arg_count = 0;
 	zend_class_entry *ce = NULL, *old_ce = NULL;
@@ -735,7 +755,7 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 	flags = how & PDO_FETCH_FLAGS;
 	how = how & ~PDO_FETCH_FLAGS;
 
-	if (!do_fetch_common(stmt, ori, offset)) {
+	if (!do_fetch_common(stmt, ori, offset, fetch_failed)) {
 		return 0;
 	}
 
@@ -794,13 +814,28 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 
 			if (flags == PDO_FETCH_GROUP && stmt->fetch.column == -1) {
 				if (!fetch_value(stmt, return_value, 1, NULL)) {
+					if (fetch_failed) {
+						*fetch_failed = true;
+					}
+					zval_ptr_dtor(return_value);
+					ZVAL_NULL(return_value);
 					return 0;
 				}
 			} else if (flags == PDO_FETCH_GROUP && colno) {
 				if (!fetch_value(stmt, return_value, 0, NULL)) {
+					if (fetch_failed) {
+						*fetch_failed = true;
+					}
+					zval_ptr_dtor(return_value);
+					ZVAL_NULL(return_value);
 					return 0;
 				}
 			} else if (!fetch_value(stmt, return_value, colno, NULL)) {
+				if (fetch_failed) {
+					*fetch_failed = true;
+				}
+				zval_ptr_dtor(return_value);
+				ZVAL_NULL(return_value);
 				return 0;
 			}
 			if (!return_all) {
@@ -823,6 +858,12 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 				do_fetch_opt_finish(stmt, 0);
 
 				if (!fetch_value(stmt, &val, i++, NULL)) {
+					if (fetch_failed) {
+						*fetch_failed = true;
+					}
+					zval_ptr_dtor(return_value);
+					ZVAL_NULL(return_value);
+					restore_classtype_state(stmt, old_ce, &old_ctor_args, old_arg_count);
 					return 0;
 				}
 				if (Z_TYPE(val) != IS_NULL) {
@@ -909,14 +950,26 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 	if (return_all && how != PDO_FETCH_KEY_PAIR) {
 		if (flags == PDO_FETCH_GROUP && how == PDO_FETCH_COLUMN && stmt->fetch.column > 0) {
 			if (!fetch_value(stmt, &grp_val, colno, NULL)) {
+				if (fetch_failed) {
+					*fetch_failed = true;
+				}
+				zval_ptr_dtor(&grp_val);
+				zval_ptr_dtor(return_value);
+				ZVAL_NULL(return_value);
 				return 0;
 			}
 		} else if (!fetch_value(stmt, &grp_val, i, NULL)) {
+			if (fetch_failed) {
+				*fetch_failed = true;
+			}
+			zval_ptr_dtor(&grp_val);
+			zval_ptr_dtor(return_value);
+			ZVAL_NULL(return_value);
 			return 0;
 		}
 		convert_to_string(&grp_val);
 		if (how == PDO_FETCH_COLUMN) {
-			i = stmt->column_count; /* no more data to fetch */
+			i = stmt->column_count;
 		} else {
 			i++;
 		}
@@ -925,8 +978,25 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 	for (idx = 0; i < stmt->column_count; i++, idx++) {
 		zval val;
 		if (!fetch_value(stmt, &val, i, NULL)) {
+			if (fetch_failed) {
+				*fetch_failed = true;
+			}
+			if (how == PDO_FETCH_FUNC) {
+				for (int j = 0; j < idx; j++) {
+					zval_ptr_dtor(&stmt->fetch.func.values[j]);
+				}
+			}
+			if (how == PDO_FETCH_CLASS && (flags & PDO_FETCH_CLASSTYPE)) {
+				restore_classtype_state(stmt, old_ce, &old_ctor_args, old_arg_count);
+			}
+			if (return_all && how != PDO_FETCH_COLUMN) {
+				zval_ptr_dtor(&grp_val);
+			}
+			zval_ptr_dtor(return_value);
+			ZVAL_NULL(return_value);
 			return 0;
 		}
+
 
 		switch (how) {
 			case PDO_FETCH_ASSOC:
@@ -937,7 +1007,12 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 				{
 					zval tmp;
 					if (!fetch_value(stmt, &tmp, ++i, NULL)) {
+						if (fetch_failed) {
+							*fetch_failed = true;
+						}
 						zval_ptr_dtor(&val);
+						zval_ptr_dtor(return_value);
+						ZVAL_NULL(return_value);
 						return 0;
 					}
 
@@ -950,7 +1025,6 @@ static bool do_fetch(pdo_stmt_t *stmt, zval *return_value, enum pdo_fetch_type h
 					zval_ptr_dtor(&val);
 					return 1;
 				}
-				break;
 
 			case PDO_FETCH_USE_DEFAULT:
 			case PDO_FETCH_BOTH:
@@ -1183,7 +1257,7 @@ PHP_METHOD(PDOStatement, fetch)
 		RETURN_THROWS();
 	}
 
-	if (!do_fetch(stmt, return_value, how, ori, off, NULL)) {
+	if (!do_fetch(stmt, return_value, how, ori, off, NULL, NULL)) {
 		PDO_HANDLE_STMT_ERR();
 		RETURN_FALSE;
 	}
@@ -1224,7 +1298,7 @@ PHP_METHOD(PDOStatement, fetchObject)
 		stmt->fetch.cls.ce = zend_standard_class_def;
 	}
 
-	if (!do_fetch(stmt, return_value, PDO_FETCH_CLASS, PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL)) {
+	if (!do_fetch(stmt, return_value, PDO_FETCH_CLASS, PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL, NULL)) {
 		PDO_HANDLE_STMT_ERR();
 		RETVAL_FALSE;
 	}
@@ -1249,7 +1323,7 @@ PHP_METHOD(PDOStatement, fetchColumn)
 	PHP_STMT_GET_OBJ;
 	PDO_STMT_CLEAR_ERR();
 
-	if (!do_fetch_common(stmt, PDO_FETCH_ORI_NEXT, 0)) {
+	if (!do_fetch_common(stmt, PDO_FETCH_ORI_NEXT, 0, NULL)) {
 		PDO_HANDLE_STMT_ERR();
 		RETURN_FALSE;
 	}
@@ -1400,7 +1474,8 @@ PHP_METHOD(PDOStatement, fetchAll)
 		array_init(return_value);
 		return_all = return_value;
 	}
-	if (!do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, return_all)) {
+	bool fetch_failed = false;
+	if (!do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, return_all, &fetch_failed)) {
 		error = true;
 	}
 
@@ -1408,12 +1483,16 @@ PHP_METHOD(PDOStatement, fetchAll)
 		if ((how & PDO_FETCH_GROUP) || how == PDO_FETCH_KEY_PAIR ||
 			(how == PDO_FETCH_USE_DEFAULT && stmt->default_fetch_type == PDO_FETCH_KEY_PAIR)
 		) {
-			while (do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, return_all));
+			while (do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, return_all, &fetch_failed))
+				;
 		} else {
 			array_init(return_value);
 			do {
 				zend_hash_next_index_insert_new(Z_ARRVAL_P(return_value), &data);
-			} while (do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL));
+			} while (do_fetch(stmt, &data, how | flags, PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL, &fetch_failed));
+		}
+		if (fetch_failed) {
+			error = true;
 		}
 	}
 
@@ -2265,7 +2344,7 @@ static void pdo_stmt_iter_move_forwards(zend_object_iterator *iter)
 	}
 
 	if (!do_fetch(stmt, &I->fetch_ahead, PDO_FETCH_USE_DEFAULT,
-			PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL)) {
+			PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL, NULL)) {
 
 		PDO_HANDLE_STMT_ERR();
 		I->key = (zend_ulong)-1;
@@ -2308,7 +2387,7 @@ zend_object_iterator *pdo_stmt_iter_get(zend_class_entry *ce, zval *object, int 
 	ZVAL_OBJ(&I->iter.data, Z_OBJ_P(object));
 
 	if (!do_fetch(stmt, &I->fetch_ahead, PDO_FETCH_USE_DEFAULT,
-			PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL)) {
+			PDO_FETCH_ORI_NEXT, /* offset */ 0, NULL, NULL)) {
 		PDO_HANDLE_STMT_ERR();
 		I->key = (zend_ulong)-1;
 		ZVAL_UNDEF(&I->fetch_ahead);
@@ -2320,12 +2399,13 @@ zend_object_iterator *pdo_stmt_iter_get(zend_class_entry *ce, zval *object, int 
 /* }}} */
 
 /* {{{ overloaded handlers for PDORow class (used by PDO_FETCH_LAZY) */
-static zval *row_read_column_name(pdo_stmt_t *stmt, zend_string *name, zval *rv)
+static zval *row_read_column_name(pdo_stmt_t *stmt, zend_string *name, zval *rv, bool *fetch_failed)
 {
 	/* TODO: replace this with a hash of available column names to column numbers */
 	for (int colno = 0; colno < stmt->column_count; colno++) {
 		if (zend_string_equals(stmt->columns[colno].name, name)) {
 			if (!fetch_value(stmt, rv, colno, NULL)) {
+				*fetch_failed = true;
 				return NULL;
 			}
 			return rv;
@@ -2334,10 +2414,11 @@ static zval *row_read_column_name(pdo_stmt_t *stmt, zend_string *name, zval *rv)
 	return NULL;
 }
 
-static zval *row_read_column_number(pdo_stmt_t *stmt, zend_long column, zval *rv)
+static zval *row_read_column_number(pdo_stmt_t *stmt, zend_long column, zval *rv, bool *fetch_failed)
 {
 	if (column >= 0 && column < stmt->column_count) {
 		if (!fetch_value(stmt, rv, column, NULL)) {
+			*fetch_failed = true;
 			return NULL;
 		}
 		return rv;
@@ -2351,26 +2432,21 @@ static zval *row_prop_read(zend_object *object, zend_string *name, int type, voi
 	pdo_stmt_t *stmt = row->stmt;
 	zend_long lval;
 	zval *retval;
+	bool fetch_failed = false;
 	ZEND_ASSERT(stmt);
 
 	ZVAL_NULL(rv);
 	if (zend_string_equals_literal(name, "queryString")) {
 		return zend_std_read_property(&stmt->std, name, type, cache_slot, rv);
 	} else if (is_numeric_str_function(name, &lval, /* dval */ NULL) == IS_LONG) {
-		retval = row_read_column_number(stmt, lval, rv);
+		retval = row_read_column_number(stmt, lval, rv, &fetch_failed);
 	} else {
-		retval = row_read_column_name(stmt, name, rv);
+		retval = row_read_column_name(stmt, name, rv, &fetch_failed);
 	}
 	if (UNEXPECTED(!retval)) {
-		// TODO throw an error on master
-		//if (type != BP_VAR_IS) {
-		//	if (is_numeric) {
-		//		zend_value_error("Invalid column index");
-		//	} else {
-		//		zend_throw_error(NULL, "No column named \"%s\" exists", ZSTR_VAL(name));
-		//	}
-		//}
-		//return &EG(uninitialized_zval);
+		if (fetch_failed) {
+			PDO_HANDLE_STMT_ERR();
+		}
 		ZVAL_NULL(rv);
 		return rv;
 	}
@@ -2392,7 +2468,7 @@ static zval *row_dim_read(zend_object *object, zval *offset, int type, zval *rv)
 		if (Z_LVAL_P(offset) >= 0 && Z_LVAL_P(offset) < stmt->column_count) {
 			if (!fetch_value(stmt, rv, Z_LVAL_P(offset), NULL)) {
 				PDO_HANDLE_STMT_ERR();
-				return NULL;
+				return rv;
 			}
 		}
 		return rv;
@@ -2406,7 +2482,6 @@ static zval *row_dim_read(zend_object *object, zval *offset, int type, zval *rv)
 		return result;
 	}
 }
-
 static zval *row_prop_write(zend_object *object, zend_string *name, zval *value, void **cache_slot)
 {
 	zend_throw_error(NULL, "Cannot write to PDORow property");
@@ -2430,15 +2505,19 @@ static int row_prop_exists(zend_object *object, zend_string *name, int check_emp
 	zend_long lval;
 	zval tmp_val;
 	zval *retval = NULL;
+	bool fetch_failed = false;
 	ZEND_ASSERT(stmt);
 
 	if (is_numeric_str_function(name, &lval, /* dval */ NULL) == IS_LONG) {
-		retval = row_read_column_number(stmt, lval, &tmp_val);
+		retval = row_read_column_number(stmt, lval, &tmp_val, &fetch_failed);
 	} else {
-		retval = row_read_column_name(stmt, name, &tmp_val);
+		retval = row_read_column_name(stmt, name, &tmp_val, &fetch_failed);
 	}
 
 	if (!retval) {
+		if (fetch_failed) {
+			PDO_HANDLE_STMT_ERR();
+		}
 		return false;
 	}
 	ZEND_ASSERT(retval == &tmp_val);
@@ -2447,7 +2526,6 @@ static int row_prop_exists(zend_object *object, zend_string *name, int check_emp
 
 	return res;
 }
-
 
 // todo: make row_dim_exists return bool as well
 static int row_dim_exists(zend_object *object, zval *offset, int check_empty)
@@ -2463,8 +2541,12 @@ static int row_dim_exists(zend_object *object, zval *offset, int check_empty)
 		}
 
 		zval tmp_val;
-		zval *retval = row_read_column_number(stmt, column, &tmp_val);
+		bool fetch_failed = false;
+		zval *retval = row_read_column_number(stmt, column, &tmp_val, &fetch_failed);
 		if (!retval) {
+			if (fetch_failed) {
+				PDO_HANDLE_STMT_ERR();
+			}
 			return false;
 		}
 		ZEND_ASSERT(retval == &tmp_val);
@@ -2513,7 +2595,7 @@ static HashTable *row_get_properties_for(zend_object *object, zend_prop_purpose 
 		zval val;
 		if (!fetch_value(stmt, &val, i, NULL)) {
 			PDO_HANDLE_STMT_ERR();
-			zval_ptr_dtor(props);
+			zend_array_destroy(props);
 			return NULL;
 		}
 
