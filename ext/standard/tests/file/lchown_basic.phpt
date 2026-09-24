@@ -4,6 +4,8 @@ Test lchown() function : basic functionality
 <?php
 if (substr(PHP_OS, 0, 3) == 'WIN') die('skip no windows support');
 if (!function_exists("posix_getuid")) die("skip no posix_getuid()");
+if (!function_exists("posix_getpwuid")) die("skip no posix_getpwuid()");
+if (posix_getpwuid(posix_getuid()) === false) die("skip current user unavailable");
 ?>
 --FILE--
 <?php
@@ -16,6 +18,8 @@ $uid = posix_getuid();
 var_dump( touch( $filename ) );
 var_dump( symlink( $filename, $symlink ) );
 var_dump( lchown( $filename, $uid ) );
+var_dump( lchown( $filename, posix_getpwuid( $uid )['name'] ) );
+var_dump( fileowner( $filename ) === $uid );
 var_dump( fileowner( $symlink ) === $uid );
 
 ?>
@@ -30,6 +34,8 @@ unlink($symlink);
 ?>
 --EXPECT--
 *** Testing lchown() : basic functionality ***
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)
