@@ -136,13 +136,16 @@ typedef struct {
 static ssize_t php_pdosqlite3_stream_write(php_stream *stream, const char *buf, size_t count)
 {
 	php_stream_pdosqlite3_data *sqlite3_stream = (php_stream_pdosqlite3_data *) stream->abstract;
+	size_t remaining_size;
 
 	if (sqlite3_stream->flags & SQLITE_OPEN_READONLY) {
 		php_error_docref(NULL, E_WARNING, "Can't write to blob stream: is open as read only");
 		return -1;
 	}
 
-	if (sqlite3_stream->position + count > sqlite3_stream->size) {
+	ZEND_ASSERT(sqlite3_stream->position <= sqlite3_stream->size);
+	remaining_size = sqlite3_stream->size - sqlite3_stream->position;
+	if (count > remaining_size) {
 		php_error_docref(NULL, E_WARNING, "It is not possible to increase the size of a BLOB");
 		return -1;
 	}
@@ -151,7 +154,7 @@ static ssize_t php_pdosqlite3_stream_write(php_stream *stream, const char *buf, 
 		return -1;
 	}
 
-	if (sqlite3_stream->position + count >= sqlite3_stream->size) {
+	if (count >= remaining_size) {
 		stream->eof = 1;
 		sqlite3_stream->position = sqlite3_stream->size;
 	}
@@ -165,9 +168,12 @@ static ssize_t php_pdosqlite3_stream_write(php_stream *stream, const char *buf, 
 static ssize_t php_pdosqlite3_stream_read(php_stream *stream, char *buf, size_t count)
 {
 	php_stream_pdosqlite3_data *sqlite3_stream = (php_stream_pdosqlite3_data *) stream->abstract;
+	size_t remaining_size;
 
-	if (sqlite3_stream->position + count >= sqlite3_stream->size) {
-		count = sqlite3_stream->size - sqlite3_stream->position;
+	ZEND_ASSERT(sqlite3_stream->position <= sqlite3_stream->size);
+	remaining_size = sqlite3_stream->size - sqlite3_stream->position;
+	if (count >= remaining_size) {
+		count = remaining_size;
 		stream->eof = 1;
 	}
 	if (count) {
@@ -201,39 +207,45 @@ static int php_pdosqlite3_stream_flush(php_stream *stream)
 static int php_pdosqlite3_stream_seek(php_stream *stream, zend_off_t offset, int whence, zend_off_t *newoffs)
 {
 	php_stream_pdosqlite3_data *sqlite3_stream = (php_stream_pdosqlite3_data *) stream->abstract;
+	size_t remaining_size;
+
+	ZEND_ASSERT(sqlite3_stream->position <= sqlite3_stream->size);
+	remaining_size = sqlite3_stream->size - sqlite3_stream->position;
 
 	switch(whence) {
 		case SEEK_CUR:
 			if (offset < 0) {
-				if (sqlite3_stream->position < (size_t)(-offset)) {
+				size_t distance = (size_t) (-(offset + 1)) + 1;
+
+				if (sqlite3_stream->position < distance) {
 					sqlite3_stream->position = 0;
 					*newoffs = -1;
 					return -1;
 				} else {
-					sqlite3_stream->position = sqlite3_stream->position + offset;
+					sqlite3_stream->position -= distance;
 					*newoffs = sqlite3_stream->position;
 					stream->eof = 0;
 					return 0;
 				}
 			} else {
-				if (sqlite3_stream->position + (size_t)(offset) > sqlite3_stream->size) {
+				if (offset > (zend_off_t) remaining_size) {
 					sqlite3_stream->position = sqlite3_stream->size;
 					*newoffs = -1;
 					return -1;
 				} else {
-					sqlite3_stream->position = sqlite3_stream->position + offset;
+					sqlite3_stream->position += (size_t) offset;
 					*newoffs = sqlite3_stream->position;
 					stream->eof = 0;
 					return 0;
 				}
 			}
 		case SEEK_SET:
-			if (sqlite3_stream->size < (size_t)(offset)) {
+			if (offset < 0 || offset > (zend_off_t) sqlite3_stream->size) {
 				sqlite3_stream->position = sqlite3_stream->size;
 				*newoffs = -1;
 				return -1;
 			} else {
-				sqlite3_stream->position = offset;
+				sqlite3_stream->position = (size_t) offset;
 				*newoffs = sqlite3_stream->position;
 				stream->eof = 0;
 				return 0;
@@ -243,15 +255,22 @@ static int php_pdosqlite3_stream_seek(php_stream *stream, zend_off_t offset, int
 				sqlite3_stream->position = sqlite3_stream->size;
 				*newoffs = -1;
 				return -1;
-			} else if (sqlite3_stream->size < (size_t)(-offset)) {
-				sqlite3_stream->position = 0;
-				*newoffs = -1;
-				return -1;
 			} else {
-				sqlite3_stream->position = sqlite3_stream->size + offset;
-				*newoffs = sqlite3_stream->position;
-				stream->eof = 0;
-				return 0;
+				size_t distance = 0;
+
+				if (offset < 0) {
+					distance = (size_t) (-(offset + 1)) + 1;
+				}
+				if (distance > sqlite3_stream->size) {
+					sqlite3_stream->position = 0;
+					*newoffs = -1;
+					return -1;
+				} else {
+					sqlite3_stream->position = sqlite3_stream->size - distance;
+					*newoffs = sqlite3_stream->position;
+					stream->eof = 0;
+					return 0;
+				}
 			}
 		default:
 			*newoffs = sqlite3_stream->position;
