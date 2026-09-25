@@ -1195,10 +1195,14 @@ next_iter:
 
 static HashTable *sxe_get_gc(zend_object *object, zval **table, int *n) /* {{{ */ {
 	php_sxe_object *sxe;
-	sxe = php_sxe_fetch_object(object);
+	zend_get_gc_buffer *gc_buffer;
 
-	*table = NULL;
-	*n = 0;
+	sxe = php_sxe_fetch_object(object);
+	gc_buffer = zend_get_gc_buffer_create();
+	zend_get_gc_buffer_add_zval(gc_buffer, &sxe->iter.data);
+	zend_get_gc_buffer_add_zval(gc_buffer, &sxe->tmp);
+	zend_get_gc_buffer_use(gc_buffer, table, n);
+
 	return sxe->properties;
 }
 /* }}} */
