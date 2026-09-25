@@ -76,6 +76,11 @@ PDO_API int pdo_parse_params(pdo_stmt_t *stmt, zend_string *inquery, zend_string
 	int (*scan)(pdo_scanner_t *s);
 	struct custom_quote custom_quote = {NULL, 0};
 
+	if (memchr(ZSTR_VAL(inquery), '\0', ZSTR_LEN(inquery))) {
+		pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "SQL query must not contain NUL bytes");
+		return -1;
+	}
+
 	scan = stmt->dbh->methods->scanner ? stmt->dbh->methods->scanner : default_scanner;
 
 	s.cur = ZSTR_VAL(inquery);
