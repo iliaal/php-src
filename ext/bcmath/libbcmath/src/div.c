@@ -351,6 +351,9 @@ bool bc_divide(bc_num numerator, bc_num divisor, bc_num *quot, size_t scale)
 		memcpy(qptr, numerator->n_value, numerator->n_len + quot_scale);
 		(*quot)->n_sign = numerator->n_sign == divisor->n_sign ? PLUS : MINUS;
 		_bc_rm_leading_zeros(*quot);
+		if (bc_is_zero(*quot)) {
+			(*quot)->n_sign = PLUS;
+		}
 		return true;
 	}
 
@@ -476,6 +479,9 @@ bool bc_divide(bc_num numerator, bc_num divisor, bc_num *quot, size_t scale)
 			*qptr++ = 0;
 		}
 		(*quot)->n_sign = numerator->n_sign == divisor->n_sign ? PLUS : MINUS;
+		if (bc_is_zero(*quot)) {
+			(*quot)->n_sign = PLUS;
+		}
 		return true;
 	}
 
