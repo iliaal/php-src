@@ -22,13 +22,17 @@
 PDO_API void pdo_handle_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt);
 
 #define PDO_DBH_CLEAR_ERR()             do { \
+	dbh->error_is_core = 0; \
 	strlcpy(dbh->error_code, PDO_ERR_NONE, sizeof(PDO_ERR_NONE)); \
 	if (dbh->query_stmt) { \
 		dbh->query_stmt = NULL; \
 		zval_ptr_dtor(&dbh->query_stmt_zval); \
 	} \
 } while (0)
-#define PDO_STMT_CLEAR_ERR()    strcpy(stmt->error_code, PDO_ERR_NONE)
+#define PDO_STMT_CLEAR_ERR()    do { \
+	stmt->error_is_core = 0; \
+	strcpy(stmt->error_code, PDO_ERR_NONE); \
+} while (0)
 #define PDO_HANDLE_DBH_ERR()    if (strcmp(dbh->error_code, PDO_ERR_NONE)) { pdo_handle_error(dbh, NULL); }
 #define PDO_HANDLE_STMT_ERR()   if (strcmp(stmt->error_code, PDO_ERR_NONE)) { pdo_handle_error(stmt->dbh, stmt); }
 
