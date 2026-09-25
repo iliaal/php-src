@@ -854,27 +854,29 @@ static bool pdo_dbh_attribute_set(pdo_dbh_t *dbh, zend_long attr, zval *value) /
 			if (!pdo_get_long_param(&lval, value)) {
 				return false;
 			}
-			/* TODO Check for valid value (NULL_NATURAL, NULL_EMPTY_STRING, NULL_TO_STRING)? */
-			dbh->oracle_nulls = lval;
-			return true;
+			switch (lval) {
+				case PDO_NULL_NATURAL:
+				case PDO_NULL_EMPTY_STRING:
+				case PDO_NULL_TO_STRING:
+					dbh->oracle_nulls = lval;
+					return true;
+				default:
+					zend_value_error("PDO::ATTR_ORACLE_NULLS must be one of the PDO::NULL_* constants");
+					return false;
+			}
 
 		case PDO_ATTR_DEFAULT_FETCH_MODE:
-			if (Z_TYPE_P(value) == IS_ARRAY) {
-				zval *tmp;
-				if ((tmp = zend_hash_index_find(Z_ARRVAL_P(value), 0)) != NULL && Z_TYPE_P(tmp) == IS_LONG) {
-					if (Z_LVAL_P(tmp) == PDO_FETCH_INTO || Z_LVAL_P(tmp) == PDO_FETCH_CLASS) {
-						zend_value_error("PDO::FETCH_INTO and PDO::FETCH_CLASS cannot be set as the default fetch mode");
-						return false;
-					}
-				}
-				lval = zval_get_long(value);
-			} else {
-				if (!pdo_get_long_param(&lval, value)) {
-					return false;
-				}
+			if (!pdo_get_long_param(&lval, value)) {
+				return false;
 			}
-			if (lval == PDO_FETCH_USE_DEFAULT) {
-				zend_value_error("Fetch mode must be a bitmask of PDO::FETCH_* constants");
+			if (lval < PDO_FETCH_LAZY
+				|| lval >= (PDO_FETCH__MAX | PDO_FETCH_GROUP | PDO_FETCH_UNIQUE
+					| PDO_FETCH_CLASSTYPE | PDO_FETCH_SERIALIZE | PDO_FETCH_PROPS_LATE)
+				|| (lval & ~PDO_FETCH_FLAGS) >= PDO_FETCH__MAX
+				|| (lval & PDO_FETCH_FLAGS
+					& ~(PDO_FETCH_GROUP | PDO_FETCH_UNIQUE | PDO_FETCH_CLASSTYPE
+						| PDO_FETCH_SERIALIZE | PDO_FETCH_PROPS_LATE))) {
+				zend_value_error("PDO::ATTR_DEFAULT_FETCH_MODE must be a bitmask of PDO::FETCH_* constants");
 				return false;
 			}
 			dbh->default_fetch_type = lval;
