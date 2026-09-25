@@ -41,6 +41,22 @@
 		RETURN_THROWS(); \
 	} \
 
+static HashTable *pdo_stmt_get_column_index(pdo_stmt_t *stmt)
+{
+	return stmt->bound_column_index;
+}
+
+static void pdo_stmt_build_column_index(pdo_stmt_t *stmt)
+{
+	int col;
+
+	ALLOC_HASHTABLE(stmt->bound_column_index);
+	zend_hash_init(stmt->bound_column_index, (uint32_t) stmt->column_count, NULL, NULL, 0);
+	for (col = 0; col < stmt->column_count; col++) {
+		zend_hash_add_ptr(stmt->bound_column_index, stmt->columns[col].name, &stmt->columns[col]);
+	}
+}
+
 static inline bool rewrite_name_to_position(pdo_stmt_t *stmt, struct pdo_bound_param_data *param) /* {{{ */
 {
 	if (stmt->bound_param_map) {
@@ -51,7 +67,7 @@ static inline bool rewrite_name_to_position(pdo_stmt_t *stmt, struct pdo_bound_p
 		 * to bind multiple parameters onto the same zval in the underlying
 		 * driver */
 		zend_string *name;
-		int position = 0;
+		zval *position;
 
 		if (stmt->named_rewrite_template) {
 			/* this is not an error here */
@@ -68,19 +84,16 @@ static inline bool rewrite_name_to_position(pdo_stmt_t *stmt, struct pdo_bound_p
 			return 0;
 		}
 
-		ZEND_HASH_FOREACH_PTR(stmt->bound_param_map, name) {
-			if (!zend_string_equals(name, param->name)) {
-				position++;
-				continue;
-			}
+		position = zend_hash_find(stmt->bound_param_map, param->name);
+		if (position && Z_TYPE_P(position) == IS_LONG) {
 			if (param->paramno >= 0) {
 				/* TODO Error? */
 				pdo_raise_impl_error(stmt->dbh, stmt, "IM001", "PDO refuses to handle repeating the same :named parameter for multiple positions with this driver, as it might be unsafe to do so.  Consider using a separate name for each parameter instead");
 				return -1;
 			}
-			param->paramno = position;
+			param->paramno = Z_LVAL_P(position);
 			return 1;
-		} ZEND_HASH_FOREACH_END();
+		}
 		/* TODO Error? */
 		pdo_raise_impl_error(stmt->dbh, stmt, "HY093", "parameter was not defined");
 		return 0;
@@ -130,6 +143,10 @@ bool pdo_stmt_describe_columns(pdo_stmt_t *stmt) /* {{{ */
 	int col;
 
 	stmt->columns = ecalloc(stmt->column_count, sizeof(struct pdo_column_data));
+	if (stmt->bound_columns) {
+		ALLOC_HASHTABLE(stmt->bound_column_index);
+		zend_hash_init(stmt->bound_column_index, (uint32_t) stmt->column_count, NULL, NULL, 0);
+	}
 
 	for (col = 0; col < stmt->column_count; col++) {
 		if (!stmt->methods->describer(stmt, col)) {
@@ -156,6 +173,9 @@ bool pdo_stmt_describe_columns(pdo_stmt_t *stmt) /* {{{ */
 				EMPTY_SWITCH_DEFAULT_CASE()
 			}
 		}
+		if (stmt->bound_column_index) {
+			zend_hash_add_ptr(stmt->bound_column_index, stmt->columns[col].name, &stmt->columns[col]);
+		}
 
 		/* update the column index on named bound parameters */
 		if (stmt->bound_columns) {
@@ -173,6 +193,11 @@ bool pdo_stmt_describe_columns(pdo_stmt_t *stmt) /* {{{ */
 /* }}} */
 
 static void pdo_stmt_reset_columns(pdo_stmt_t *stmt) {
+	if (stmt->bound_column_index) {
+		zend_hash_destroy(stmt->bound_column_index);
+		FREE_HASHTABLE(stmt->bound_column_index);
+		stmt->bound_column_index = NULL;
+	}
 	if (stmt->columns) {
 		int i;
 		struct pdo_column_data *cols = stmt->columns;
@@ -292,16 +317,16 @@ static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_
 	}
 
 	if (!is_param && param->name && stmt->columns) {
-		/* try to map the name to the column */
-		int i;
+		struct pdo_column_data *column;
 
-		for (i = 0; i < stmt->column_count; i++) {
-			if (zend_string_equals(stmt->columns[i].name, param->name)) {
-				param->paramno = i;
-				break;
-			}
+		if (!stmt->bound_column_index) {
+			pdo_stmt_build_column_index(stmt);
 		}
+		column = zend_hash_find_ptr(pdo_stmt_get_column_index(stmt), param->name);
 
+		if (column) {
+			param->paramno = (zend_long) (column - stmt->columns);
+		}
 		/* if you prepare and then execute passing an array of params keyed by names,
 		 * then this will trigger, and we don't want that */
 		if (param->paramno == -1) {

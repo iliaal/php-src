@@ -58,7 +58,9 @@ struct custom_quote {
 };
 
 static void free_param_name(zval *el) {
-	zend_string_release(Z_PTR_P(el));
+	if (Z_TYPE_P(el) == IS_PTR) {
+		zend_string_release(Z_PTR_P(el));
+	}
 }
 
 PDO_API int pdo_parse_params(pdo_stmt_t *stmt, zend_string *inquery, zend_string **outquery)
@@ -422,7 +424,11 @@ rewrite:
 
 		for (plc = placeholders; plc; plc = plc->next) {
 			zend_string *name = zend_string_init(plc->pos, plc->len, 0);
-			zend_hash_index_update_ptr(stmt->bound_param_map, plc->bindno, name);
+			zval position;
+
+			ZVAL_LONG(&position, plc->bindno);
+			zend_hash_update(stmt->bound_param_map, name, &position);
+			zend_hash_index_update_ptr(stmt->bound_param_map, plc->bindno, zend_string_copy(name));
 			plc->quoted = ZSTR_CHAR('?');
 			newbuffer_len -= plc->len - 1;
 		}
