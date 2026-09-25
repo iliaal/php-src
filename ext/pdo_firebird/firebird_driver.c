@@ -557,7 +557,9 @@ void php_firebird_set_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, const char *state,
 
 		while ((buf_size > (read_len + 1)) && (tmp_len = fb_interpret(&buf[read_len], (buf_size - read_len - 1), &s)) && tmp_len > 0) {
 			read_len += tmp_len;
-			buf[read_len++] = ' ';
+			if (read_len < buf_size - 1) {
+				buf[read_len++] = ' ';
+			}
 		}
 
 		/* remove last space */
