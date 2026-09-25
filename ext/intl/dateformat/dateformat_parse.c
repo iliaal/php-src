@@ -25,6 +25,48 @@
 #include "dateformat_class.h"
 #include "dateformat_data.h"
 
+#include <unicode/utf16.h>
+
+static bool datefmt_utf8_offset_to_utf16(const char *str, size_t str_len, int32_t *position, UErrorCode *status)
+{
+	int32_t utf16_position;
+
+	if (*position < 0 || (size_t) *position > str_len) {
+		return true;
+	}
+
+	*status = U_ZERO_ERROR;
+	u_strFromUTF8(NULL, 0, &utf16_position, str, *position, status);
+	if (*status != U_BUFFER_OVERFLOW_ERROR && U_FAILURE(*status)) {
+		return false;
+	}
+	*status = U_ZERO_ERROR;
+
+	*position = utf16_position;
+	return true;
+}
+
+static int32_t datefmt_utf16_offset_to_utf8(const UChar *str, int32_t str_len, int32_t position)
+{
+	int32_t utf8_position;
+	UErrorCode status = U_ZERO_ERROR;
+
+	if (position < 0 || position > str_len) {
+		return position;
+	}
+
+	if (position > 0 && position < str_len && U16_IS_LEAD(str[position - 1]) && U16_IS_TRAIL(str[position])) {
+		position--;
+	}
+
+	u_strToUTF8(NULL, 0, &utf8_position, str, position, &status);
+	if (status != U_BUFFER_OVERFLOW_ERROR && U_FAILURE(status)) {
+		return position;
+	}
+
+	return utf8_position;
+}
+
 /* {{{
  * Internal function which calls the udat_parse
  * param int store_error acts like a boolean
@@ -41,10 +83,19 @@ static void internal_parse_to_timestamp(IntlDateFormatter_object *dfo, char* tex
 	/* Convert timezone to UTF-16. */
 	intl_convert_utf8_to_utf16(&text_utf16, &text_utf16_len, text_to_parse, text_len, &INTL_DATA_ERROR_CODE(dfo));
 	INTL_METHOD_CHECK_STATUS(dfo, "Error converting timezone to UTF-16" );
+	if (parse_pos && !datefmt_utf8_offset_to_utf16(text_to_parse, text_len, parse_pos, &INTL_DATA_ERROR_CODE(dfo))) {
+		if (text_utf16) {
+			efree(text_utf16);
+		}
+		INTL_METHOD_CHECK_STATUS(dfo, "Invalid UTF-8 offset" );
+	}
 
 	if (UNEXPECTED(update_calendar)) {
 		UCalendar *parsed_calendar = (UCalendar *)udat_getCalendar(DATE_FORMAT_OBJECT(dfo));
 		udat_parseCalendar(DATE_FORMAT_OBJECT(dfo), parsed_calendar, text_utf16, text_utf16_len, parse_pos, &INTL_DATA_ERROR_CODE(dfo));
+		if (parse_pos) {
+			*parse_pos = datefmt_utf16_offset_to_utf8(text_utf16, text_utf16_len, *parse_pos);
+		}
 		if (text_utf16) {
 			efree(text_utf16);
 		}
@@ -52,6 +103,9 @@ static void internal_parse_to_timestamp(IntlDateFormatter_object *dfo, char* tex
 		timestamp = ucal_getMillis( parsed_calendar, &INTL_DATA_ERROR_CODE(dfo));
 	} else {
 		timestamp = udat_parse(DATE_FORMAT_OBJECT(dfo), text_utf16, text_utf16_len, parse_pos, &INTL_DATA_ERROR_CODE(dfo));
+		if (parse_pos) {
+			*parse_pos = datefmt_utf16_offset_to_utf8(text_utf16, text_utf16_len, *parse_pos);
+		}
 		if (text_utf16) {
 			efree(text_utf16);
 		}
@@ -95,9 +149,18 @@ static void internal_parse_to_localtime(IntlDateFormatter_object *dfo, char* tex
 	/* Convert timezone to UTF-16. */
 	intl_convert_utf8_to_utf16(&text_utf16, &text_utf16_len, text_to_parse, text_len, &INTL_DATA_ERROR_CODE(dfo));
 	INTL_METHOD_CHECK_STATUS(dfo, "Error converting timezone to UTF-16" );
+	if (parse_pos && !datefmt_utf8_offset_to_utf16(text_to_parse, text_len, parse_pos, &INTL_DATA_ERROR_CODE(dfo))) {
+		if (text_utf16) {
+			efree(text_utf16);
+		}
+		INTL_METHOD_CHECK_STATUS(dfo, "Invalid UTF-8 offset" );
+	}
 
 	parsed_calendar = (UCalendar *)udat_getCalendar(DATE_FORMAT_OBJECT(dfo));
 	udat_parseCalendar( DATE_FORMAT_OBJECT(dfo), parsed_calendar, text_utf16, text_utf16_len, parse_pos, &INTL_DATA_ERROR_CODE(dfo));
+	if (parse_pos) {
+		*parse_pos = datefmt_utf16_offset_to_utf8(text_utf16, text_utf16_len, *parse_pos);
+	}
 
 	if (text_utf16) {
 		efree(text_utf16);
