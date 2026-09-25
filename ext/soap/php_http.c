@@ -1564,7 +1564,8 @@ static zend_string* get_http_body(php_stream *stream, int close, char *headers)
 		while (http_buf_size < header_length) {
 			ssize_t len_read = php_stream_read(stream, http_buf->val + http_buf_size, header_length - http_buf_size);
 			if (len_read <= 0) {
-				break;
+				zend_string_efree(http_buf);
+				return NULL;
 			}
 			http_buf_size += len_read;
 		}
