@@ -1358,6 +1358,7 @@ ZEND_API zend_result zend_eval_stringl(const char *str, size_t str_len, zval *re
 			ZVAL_UNDEF(&local_retval);
 			zend_execute(new_op_array, &local_retval);
 		} zend_catch {
+			EG(no_extensions)=0;
 			destroy_op_array(new_op_array);
 			efree_size(new_op_array, sizeof(zend_op_array));
 			zend_bailout();
