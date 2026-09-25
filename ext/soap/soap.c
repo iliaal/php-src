@@ -74,15 +74,34 @@ static void soap_error_handler(int error_num, zend_string *error_filename, uint3
 	char* _old_error_code = SOAP_GLOBAL(error_code);\
 	zend_object* _old_error_object = Z_OBJ(SOAP_GLOBAL(error_object));\
 	int _old_soap_version = SOAP_GLOBAL(soap_version);\
+	bool _bailout = false;\
 	SOAP_GLOBAL(use_soap_error_handler) = 1;\
 	SOAP_GLOBAL(error_code) = "Server";\
-	Z_OBJ(SOAP_GLOBAL(error_object)) = Z_OBJ_P(ZEND_THIS);
+	Z_OBJ(SOAP_GLOBAL(error_object)) = Z_OBJ_P(ZEND_THIS);\
+	zend_try {
 
-#define SOAP_SERVER_END_CODE() \
+#define SOAP_SERVER_RESTORE_CODE() \
 	SOAP_GLOBAL(use_soap_error_handler) = _old_handler;\
 	SOAP_GLOBAL(error_code) = _old_error_code;\
 	Z_OBJ(SOAP_GLOBAL(error_object)) = _old_error_object;\
 	SOAP_GLOBAL(soap_version) = _old_soap_version;
+
+#define SOAP_SERVER_END_CODE() \
+	} zend_catch {\
+		_bailout = true;\
+	} zend_end_try();\
+	SOAP_SERVER_RESTORE_CODE();\
+	if (_bailout) {\
+		zend_bailout();\
+	}
+
+#define SOAP_SERVER_END_CODE_CLEANUP() \
+	} zend_catch {\
+		_bailout = true;\
+		SOAP_SERVER_RESTORE_CODE();\
+		goto fail;\
+	} zend_end_try();\
+	SOAP_SERVER_RESTORE_CODE();
 
 #define SOAP_CLIENT_BEGIN_CODE() \
 	bool _old_handler = SOAP_GLOBAL(use_soap_error_handler);\
@@ -162,16 +181,6 @@ static void soap_error_handler(int error_num, zend_string *error_filename, uint3
 		ss = soap_server_object_fetch(Z_OBJ_P(ZEND_THIS))->service; \
 		if (!ss) { \
 			zend_throw_error(NULL, "Cannot fetch SoapServer object"); \
-			RETURN_THROWS(); \
-		} \
-	}
-
-#define FETCH_THIS_SERVICE(ss) \
-	{ \
-		ss = soap_server_object_fetch(Z_OBJ_P(ZEND_THIS))->service; \
-		if (!ss) { \
-			zend_throw_error(NULL, "Cannot fetch SoapServer object"); \
-			SOAP_SERVER_END_CODE(); \
 			RETURN_THROWS(); \
 		} \
 	}
@@ -1289,15 +1298,23 @@ PHP_METHOD(SoapServer, handle)
 		RETURN_THROWS();
 	}
 
+	FETCH_THIS_SERVICE_NO_BAILOUT(service);
+	old_sdl = SOAP_GLOBAL(sdl);
+	old_encoding = SOAP_GLOBAL(encoding);
+	old_class_map = SOAP_GLOBAL(class_map);
+	old_typemap = SOAP_GLOBAL(typemap);
+	old_features = SOAP_GLOBAL(features);
+	old_soap_version = SOAP_GLOBAL(soap_version);
+	ZVAL_UNDEF(&function_name);
+	ZVAL_UNDEF(&retval);
+	params = NULL;
+
 	SOAP_SERVER_BEGIN_CODE();
 
-	FETCH_THIS_SERVICE(service);
 	SOAP_GLOBAL(soap_version) = service->version;
 
 	if (arg && ZEND_SIZE_T_INT_OVFL(arg_len)) {
 		soap_server_fault("Server", "Input string is too long", NULL, NULL, NULL);
-		SOAP_SERVER_END_CODE();
-		return;
 	}
 
 	if (SG(request_info).request_method &&
@@ -1326,8 +1343,7 @@ PHP_METHOD(SoapServer, handle)
 			zval_ptr_dtor_str(&readfile);
 			zval_ptr_dtor(&readfile_ret);
 
-			SOAP_SERVER_END_CODE();
-			return;
+			goto end;
 		} else {
 			soap_server_fault("Server", "WSDL generation is not supported yet", NULL, NULL, NULL);
 /*
@@ -1339,8 +1355,6 @@ PHP_METHOD(SoapServer, handle)
 			PUTS("\">\n");
 			PUTS("</definitions>");
 */
-			SOAP_SERVER_END_CODE();
-			return;
 		}
 	}
 
@@ -1378,13 +1392,11 @@ PHP_METHOD(SoapServer, handle)
 						php_stream_filter_append(&SG(request_info).request_body->readfilters, zf);
 					} else {
 						php_error_docref(NULL, E_WARNING,"Can't uncompress compressed request");
-						SOAP_SERVER_END_CODE();
-						return;
+						goto end;
 					}
 				} else {
 					php_error_docref(NULL, E_WARNING,"Request is compressed with unknown compression '%s'",Z_STRVAL_P(encoding));
-					SOAP_SERVER_END_CODE();
-					return;
+					goto end;
 				}
 			}
 
@@ -1395,8 +1407,7 @@ PHP_METHOD(SoapServer, handle)
 			}
 		} else {
 			zval_ptr_dtor(&retval);
-			SOAP_SERVER_END_CODE();
-			return;
+			goto end;
 		}
 	} else {
 		doc_request = soap_xmlParseMemory(arg,arg_len);
@@ -1418,23 +1429,21 @@ PHP_METHOD(SoapServer, handle)
 		soap_server_fault("Server", "DTD are not supported by SOAP", NULL, NULL, NULL);
 	}
 
-	old_sdl = SOAP_GLOBAL(sdl);
 	SOAP_GLOBAL(sdl) = service->sdl;
-	old_encoding = SOAP_GLOBAL(encoding);
 	SOAP_GLOBAL(encoding) = service->encoding;
-	old_class_map = SOAP_GLOBAL(class_map);
 	SOAP_GLOBAL(class_map) = service->class_map;
-	old_typemap = SOAP_GLOBAL(typemap);
 	SOAP_GLOBAL(typemap) = service->typemap;
-	old_features = SOAP_GLOBAL(features);
 	SOAP_GLOBAL(features) = service->features;
-	old_soap_version = SOAP_GLOBAL(soap_version);
 
 	zend_try {
 		function = deserialize_function_call(service->sdl, doc_request, service->actor, &function_name, &num_params, &params, &soap_version, &soap_headers);
 	} zend_catch {
 		/* Avoid leaking persistent memory */
 		xmlFreeDoc(doc_request);
+		doc_request = NULL;
+		soap_headers = NULL;
+		num_params = 0;
+		params = NULL;
 		zend_bailout();
 	} zend_end_try();
 
@@ -1550,7 +1559,7 @@ PHP_METHOD(SoapServer, handle)
 				}
 				if (call_status != SUCCESS) {
 					php_error_docref(NULL, E_WARNING, "Function '%s' call failed", Z_STRVAL(h->function_name));
-					return;
+					goto end;
 				}
 				if (Z_TYPE(h->retval) == IS_OBJECT &&
 				    instanceof_function(Z_OBJCE(h->retval), soap_fault_class_entry)) {
@@ -1634,7 +1643,7 @@ PHP_METHOD(SoapServer, handle)
 		}
 	} else {
 		php_error_docref(NULL, E_WARNING, "Function '%s' call failed", Z_STRVAL(function_name));
-		return;
+		goto end;
 	}
 
 	if (EG(exception)) {
@@ -1693,11 +1702,18 @@ fail:
 	SOAP_GLOBAL(features) = old_features;
 
 	if (doc_return) {
-		xmlFreeDoc(doc_return);
+		xmlDocPtr doc = doc_return;
+		doc_return = NULL;
+		xmlFreeDoc(doc);
 	}
 
 	/* Free soap headers */
-	zval_ptr_dtor(&retval);
+	if (Z_TYPE(retval) != IS_UNDEF) {
+		zval tmp = retval;
+		ZVAL_UNDEF(&retval);
+		zval_ptr_dtor(&tmp);
+	}
+	service->soap_headers_ptr = NULL;
 	while (soap_headers != NULL) {
 		soapHeader *h = soap_headers;
 		uint32_t i;
@@ -1706,26 +1722,48 @@ fail:
 		if (h->parameters) {
 			i = h->num_params;
 			while (i > 0) {
-				zval_ptr_dtor(&h->parameters[--i]);
+				zval tmp = h->parameters[--i];
+				ZVAL_UNDEF(&h->parameters[i]);
+				zval_ptr_dtor(&tmp);
 			}
-			efree(h->parameters);
+			void *parameters = h->parameters;
+			h->parameters = NULL;
+			efree(parameters);
 		}
-		zval_ptr_dtor_str(&h->function_name);
-		zval_ptr_dtor(&h->retval);
+		zval tmp = h->function_name;
+		ZVAL_UNDEF(&h->function_name);
+		zval_ptr_dtor_str(&tmp);
+		tmp = h->retval;
+		ZVAL_UNDEF(&h->retval);
+		zval_ptr_dtor(&tmp);
 		efree(h);
 	}
-	service->soap_headers_ptr = NULL;
 
 	/* Free Memory */
-	if (num_params > 0) {
-		for (i = 0; i < num_params;i++) {
-			zval_ptr_dtor(&params[i]);
+	if (params) {
+		i = num_params;
+		num_params = 0;
+		while (i > 0) {
+			zval tmp = params[--i];
+			ZVAL_UNDEF(&params[i]);
+			zval_ptr_dtor(&tmp);
 		}
-		efree(params);
+		void *params_to_free = params;
+		params = NULL;
+		efree(params_to_free);
 	}
-	zval_ptr_dtor_str(&function_name);
+	if (Z_TYPE(function_name) != IS_UNDEF) {
+		zval tmp = function_name;
+		ZVAL_UNDEF(&function_name);
+		zval_ptr_dtor_str(&tmp);
+	}
 
-	SOAP_SERVER_END_CODE();
+	if (_bailout) {
+		zend_bailout();
+	}
+
+end:
+	SOAP_SERVER_END_CODE_CLEANUP();
 }
 /* }}} */
 
@@ -1745,8 +1783,10 @@ PHP_METHOD(SoapServer, fault)
 		RETURN_THROWS();
 	}
 
+	FETCH_THIS_SERVICE_NO_BAILOUT(service);
+
 	SOAP_SERVER_BEGIN_CODE();
-	FETCH_THIS_SERVICE(service);
+
 	old_encoding = SOAP_GLOBAL(encoding);
 	SOAP_GLOBAL(encoding) = service->encoding;
 
