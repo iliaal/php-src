@@ -75,6 +75,12 @@ echo "===QUERY===\n";
 var_dump($db->getAttribute(PDO::ATTR_STATEMENT_CLASS));
 $db->setAttribute(PDO::ATTR_STATEMENT_CLASS, array('PDOStatementx', array($db)));
 var_dump($db->getAttribute(PDO::ATTR_STATEMENT_CLASS));
+try {
+    $db->setAttribute(PDO::ATTR_STATEMENT_CLASS, [PDOStatement::class, 'invalid-args']);
+} catch (TypeError $e) {
+    echo $e::class, ': ', $e->getMessage(), PHP_EOL;
+}
+var_dump($db->getAttribute(PDO::ATTR_STATEMENT_CLASS));
 $stmt = $db->query('SELECT * FROM test030');
 var_dump(get_class($stmt));
 var_dump(get_class($stmt->dbh));
@@ -102,6 +108,17 @@ array(1) {
   [0]=>
   string(12) "PDOStatement"
 }
+array(2) {
+  [0]=>
+  string(13) "PDOStatementX"
+  [1]=>
+  array(1) {
+    [0]=>
+    object(PDODatabase)#%d (0) {
+    }
+  }
+}
+TypeError: PDO::ATTR_STATEMENT_CLASS constructor_args must be of type ?array, array given
 array(2) {
   [0]=>
   string(13) "PDOStatementX"
