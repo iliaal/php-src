@@ -23,6 +23,7 @@
 #include "ext/standard/info.h"
 #include "ext/pdo/php_pdo.h"
 #include "ext/pdo/php_pdo_driver.h"
+#include "ext/pdo/pdo_sql_parser.h"
 /* this file actually lives in main/ */
 #include "php_odbc_utils.h"
 #include "php_pdo_odbc.h"
@@ -467,10 +468,25 @@ static const struct pdo_dbh_methods odbc_methods = {
 	NULL /* scanner */
 };
 
+static const struct pdo_dbh_methods odbc_bracket_methods = {
+	.closer = odbc_handle_closer,
+	.preparer = odbc_handle_preparer,
+	.doer = odbc_handle_doer,
+	.begin = odbc_handle_begin,
+	.commit = odbc_handle_commit,
+	.rollback = odbc_handle_rollback,
+	.set_attribute = odbc_handle_set_attr,
+	.fetch_err = pdo_odbc_fetch_error_func,
+	.get_attribute = odbc_handle_get_attr,
+	.check_liveness = odbc_handle_check_liveness,
+	.scanner = pdo_bracket_scanner,
+};
+
 static int pdo_odbc_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* {{{ */
 {
 	pdo_odbc_db_handle *H;
 	RETCODE rc;
+	SQLCHAR dbms_name[64] = {0};
 	int use_direct = 0;
 	zend_ulong cursor_lib;
 
@@ -617,7 +633,14 @@ static int pdo_odbc_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* {{{ 
 
 	/* TODO: if we want to play nicely, we should check to see if the driver really supports ODBC v3 or not */
 
-	dbh->methods = &odbc_methods;
+	rc = SQLGetInfo(H->dbc, SQL_DBMS_NAME, dbms_name, sizeof(dbms_name) - 1, NULL);
+	if (SQL_SUCCEEDED(rc) &&
+			(strcmp((const char *)dbms_name, "Microsoft SQL Server") == 0 ||
+			 strcmp((const char *)dbms_name, "SQLite") == 0)) {
+		dbh->methods = &odbc_bracket_methods;
+	} else {
+		dbh->methods = &odbc_methods;
+	}
 	dbh->alloc_own_columns = 1;
 
 	return 1;
