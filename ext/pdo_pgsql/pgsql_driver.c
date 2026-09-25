@@ -146,6 +146,14 @@ void pdo_pgsql_cleanup_notice_callback(pdo_pgsql_db_handle *H) /* {{{ */
 		H->notice_callback = NULL;
 	}
 }
+
+static void pdo_pgsql_request_shutdown(pdo_dbh_t *dbh)
+{
+	pdo_pgsql_db_handle *H = (pdo_pgsql_db_handle *)dbh->driver_data;
+	if (H && dbh->refcount == 2) {
+		pdo_pgsql_cleanup_notice_callback(H);
+	}
+}
 /* }}} */
 
 /* {{{ pdo_pgsql_create_lob_stream */
@@ -1334,7 +1342,7 @@ static const struct pdo_dbh_methods pgsql_methods = {
 	pdo_pgsql_get_attribute,
 	pdo_pgsql_check_liveness,	/* check_liveness */
 	pdo_pgsql_get_driver_methods,  /* get_driver_methods */
-	NULL,
+	pdo_pgsql_request_shutdown,
 	pgsql_handle_in_transaction,
 	NULL, /* get_gc */
 	pdo_pgsql_scanner
