@@ -82,6 +82,9 @@ void pdo_raise_impl_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, pdo_error_type sqlst
 
 	if (stmt) {
 		pdo_err = &stmt->error_code;
+		stmt->error_is_core = 1;
+	} else {
+		dbh->error_is_core = 1;
 	}
 
 	memcpy(*pdo_err, sqlstate, sizeof(pdo_error_type));
@@ -133,6 +136,7 @@ PDO_API void pdo_handle_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt) /* {{{ */
 	zend_long native_code = 0;
 	zend_string *message = NULL;
 	zval info;
+	bool error_is_core;
 
 	if (dbh->error_mode == PDO_ERRMODE_SILENT) {
 		return;
@@ -140,6 +144,9 @@ PDO_API void pdo_handle_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt) /* {{{ */
 
 	if (stmt) {
 		pdo_err = &stmt->error_code;
+		error_is_core = stmt->error_is_core;
+	} else {
+		error_is_core = dbh->error_is_core;
 	}
 
 	/* hash sqlstate to error messages */
@@ -149,7 +156,7 @@ PDO_API void pdo_handle_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt) /* {{{ */
 	}
 
 	ZVAL_UNDEF(&info);
-	if (dbh->methods->fetch_err) {
+	if (!error_is_core && dbh->methods->fetch_err) {
 		zval *item;
 		array_init(&info);
 
@@ -702,6 +709,7 @@ PHP_METHOD(PDO, beginTransaction)
 		zend_throw_exception_ex(php_pdo_get_exception(), 0, "This driver doesn't support transactions");
 		RETURN_THROWS();
 	}
+	PDO_DBH_CLEAR_ERR();
 
 	if (dbh->methods->begin(dbh)) {
 		dbh->in_txn = true;
@@ -726,6 +734,7 @@ PHP_METHOD(PDO, commit)
 		zend_throw_exception_ex(php_pdo_get_exception(), 0, "There is no active transaction");
 		RETURN_THROWS();
 	}
+	PDO_DBH_CLEAR_ERR();
 
 	if (dbh->methods->commit(dbh)) {
 		dbh->in_txn = false;
@@ -750,6 +759,7 @@ PHP_METHOD(PDO, rollBack)
 		zend_throw_exception_ex(php_pdo_get_exception(), 0, "There is no active transaction");
 		RETURN_THROWS();
 	}
+	PDO_DBH_CLEAR_ERR();
 
 	if (dbh->methods->rollback(dbh)) {
 		dbh->in_txn = false;
@@ -1141,6 +1151,8 @@ PHP_METHOD(PDO, errorInfo)
 	int error_count;
 	int error_count_diff 	 = 0;
 	int error_expected_count = 3;
+	pdo_error_type *pdo_err;
+	bool error_is_core;
 
 	pdo_dbh_t *dbh = Z_PDO_DBH_P(ZEND_THIS);
 
@@ -1151,14 +1163,18 @@ PHP_METHOD(PDO, errorInfo)
 	array_init(return_value);
 
 	if (dbh->query_stmt) {
-		add_next_index_string(return_value, dbh->query_stmt->error_code);
-		if(!strncmp(dbh->query_stmt->error_code, PDO_ERR_NONE, sizeof(PDO_ERR_NONE))) goto fill_array;
+		pdo_err = &dbh->query_stmt->error_code;
+		error_is_core = dbh->query_stmt->error_is_core;
+		add_next_index_string(return_value, *pdo_err);
+		if (!strncmp(*pdo_err, PDO_ERR_NONE, sizeof(PDO_ERR_NONE))) goto fill_array;
 	} else {
-		add_next_index_string(return_value, dbh->error_code);
-		if(!strncmp(dbh->error_code, PDO_ERR_NONE, sizeof(PDO_ERR_NONE))) goto fill_array;
+		pdo_err = &dbh->error_code;
+		error_is_core = dbh->error_is_core;
+		add_next_index_string(return_value, *pdo_err);
+		if (!strncmp(*pdo_err, PDO_ERR_NONE, sizeof(PDO_ERR_NONE))) goto fill_array;
 	}
 
-	if (dbh->methods->fetch_err) {
+	if (!error_is_core && dbh->methods->fetch_err) {
 		dbh->methods->fetch_err(dbh, dbh->query_stmt, return_value);
 	}
 

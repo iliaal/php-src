@@ -467,7 +467,8 @@ struct _pdo_dbh_t {
 
 	/* the sum of the number of bits here and the bit fields preceding should
 	 * equal 32 */
-	unsigned _reserved_flags:14;
+	unsigned error_is_core:1;
+	unsigned _reserved_flags:13;
 
 	/* data source string used to open this handle */
 	const char *data_source;
@@ -568,7 +569,8 @@ struct _pdo_stmt_t {
 	 * emulate prepare and bind on its behalf */
 	unsigned supports_placeholders:2;
 
-	unsigned _reserved:29;
+	unsigned error_is_core:1;
+	unsigned _reserved:28;
 
 	/* the number of columns in the result set; not valid until after
 	 * the statement has been executed at least once.  In some cases, might

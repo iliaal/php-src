@@ -1564,7 +1564,7 @@ PHP_METHOD(PDOStatement, errorInfo)
 	array_init(return_value);
 	add_next_index_string(return_value, stmt->error_code);
 
-	if (strncmp(stmt->error_code, PDO_ERR_NONE, sizeof(PDO_ERR_NONE))) {
+	if (strncmp(stmt->error_code, PDO_ERR_NONE, sizeof(PDO_ERR_NONE)) && !stmt->error_is_core) {
 		if (stmt->dbh->methods->fetch_err) {
 			stmt->dbh->methods->fetch_err(stmt->dbh, stmt, return_value);
 		}
