@@ -249,22 +249,22 @@ static void param_dtor(zval *el) /* {{{ */
 }
 /* }}} */
 
-static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_stmt_t *stmt, bool is_param) /* {{{ */
+static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_stmt_t *stmt, bool is_param, HashTable *hash)
 {
-	HashTable *hash;
 	zval *parameter;
 	struct pdo_bound_param_data *pparam = NULL;
 
-	hash = is_param ? stmt->bound_params : stmt->bound_columns;
-
 	if (!hash) {
-		ALLOC_HASHTABLE(hash);
-		zend_hash_init(hash, 13, NULL, param_dtor, 0);
+		hash = is_param ? stmt->bound_params : stmt->bound_columns;
+		if (!hash) {
+			ALLOC_HASHTABLE(hash);
+			zend_hash_init(hash, 13, NULL, param_dtor, 0);
 
-		if (is_param) {
-			stmt->bound_params = hash;
-		} else {
-			stmt->bound_columns = hash;
+			if (is_param) {
+				stmt->bound_params = hash;
+			} else {
+				stmt->bound_columns = hash;
+			}
 		}
 	}
 
@@ -381,7 +381,6 @@ static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_
 	}
 	return 1;
 }
-/* }}} */
 
 /* {{{ Execute a prepared statement, optionally binding parameters */
 PHP_METHOD(PDOStatement, execute)
@@ -402,13 +401,10 @@ PHP_METHOD(PDOStatement, execute)
 		zval *tmp;
 		zend_string *key = NULL;
 		zend_ulong num_index;
+		HashTable *bound_params = NULL;
 
-		if (stmt->bound_params) {
-			zend_hash_destroy(stmt->bound_params);
-			FREE_HASHTABLE(stmt->bound_params);
-			stmt->bound_params = NULL;
-		}
-
+		ALLOC_HASHTABLE(bound_params);
+		zend_hash_init(bound_params, 13, NULL, param_dtor, 0);
 		ZEND_HASH_FOREACH_KEY_VAL(Z_ARRVAL_P(input_params), num_index, key, tmp) {
 			memset(&param, 0, sizeof(param));
 
@@ -425,13 +421,21 @@ PHP_METHOD(PDOStatement, execute)
 			param.param_type = PDO_PARAM_STR;
 			ZVAL_COPY(&param.parameter, tmp);
 
-			if (!really_register_bound_param(&param, stmt, 1)) {
+			if (!really_register_bound_param(&param, stmt, 1, bound_params)) {
 				if (!Z_ISUNDEF(param.parameter)) {
 					zval_ptr_dtor(&param.parameter);
 				}
+				zend_hash_destroy(bound_params);
+				FREE_HASHTABLE(bound_params);
 				RETURN_FALSE;
 			}
 		} ZEND_HASH_FOREACH_END();
+
+		if (stmt->bound_params) {
+			zend_hash_destroy(stmt->bound_params);
+			FREE_HASHTABLE(stmt->bound_params);
+		}
+		stmt->bound_params = bound_params;
 	}
 
 	if (PDO_PLACEHOLDER_NONE == stmt->supports_placeholders) {
@@ -1458,7 +1462,7 @@ static void register_bound_param(INTERNAL_FUNCTION_PARAMETERS, int is_param) /* 
 	}
 
 	ZVAL_COPY(&param.parameter, parameter);
-	if (!really_register_bound_param(&param, stmt, is_param)) {
+	if (!really_register_bound_param(&param, stmt, is_param, NULL)) {
 		if (!Z_ISUNDEF(param.parameter)) {
 			zval_ptr_dtor(&(param.parameter));
 		}
@@ -1502,7 +1506,7 @@ PHP_METHOD(PDOStatement, bindValue)
 	}
 
 	ZVAL_COPY(&param.parameter, parameter);
-	if (!really_register_bound_param(&param, stmt, TRUE)) {
+	if (!really_register_bound_param(&param, stmt, TRUE, NULL)) {
 		if (!Z_ISUNDEF(param.parameter)) {
 			zval_ptr_dtor(&(param.parameter));
 			ZVAL_UNDEF(&param.parameter);
