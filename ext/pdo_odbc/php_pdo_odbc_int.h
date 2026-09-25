@@ -129,13 +129,15 @@ typedef struct {
 
 typedef struct {
 	char *data;
+	zend_string *long_data;
 	zend_ulong datalen;
 	SQLLEN fetched_len;
 	SQLSMALLINT coltype;
 	char colname[128];
 	unsigned is_long;
 	unsigned is_unicode:1;
-	unsigned _spare:31;
+	unsigned long_data_loaded:1;
+	unsigned _spare:30;
 } pdo_odbc_column;
 
 typedef struct {
