@@ -72,8 +72,6 @@ static zend_object *spoofchecker_clone_obj(zend_object *object) /* {{{ */
 		UErrorCode error = U_ZERO_ERROR;
 		spoofchecker_new->uspoof = uspoof_clone(spoofchecker_orig->uspoof, &error);
 		if (U_FAILURE(error)) {
-			/* free new object */
-			Spoofchecker_objects_free(&spoofchecker_new->zo);
 			zend_throw_error(NULL, "Failed to clone SpoofChecker");
 		}
 	} else {
