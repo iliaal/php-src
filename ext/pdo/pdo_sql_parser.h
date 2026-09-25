@@ -31,3 +31,5 @@
 #define YYLIMIT         s->end
 #define YYMARKER        s->ptr
 #define YYFILL(n)		{ if (YYLIMIT - 1 <= YYCURSOR) RET(PDO_PARSER_EOI); }
+
+PDO_API int pdo_bracket_scanner(pdo_scanner_t *s);

@@ -76,6 +76,8 @@ PHP                                                                        NEWS
     column index. (Ilia Alshanetsky)
   . Fixed PDOStatement::bindColumn() registering a binding for a column name
     that is not in the result set. (Ilia Alshanetsky)
+  . Fixed placeholder parsing inside bracketed identifiers for PDO_DBLIB and
+    SQLite and SQL Server connections through PDO_ODBC. (Ilia Alshanetsky)
 
 - Readline:
   . Fixed a heap over-read in the interactive shell prompt when cli.prompt is

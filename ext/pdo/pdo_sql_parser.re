@@ -27,7 +27,7 @@ static int default_scanner(pdo_scanner_t *s)
 	BINDCHR		= [:][a-zA-Z0-9_]+;
 	QUESTION	= [?];
 	COMMENTS	= ("/*"([^*]+|[*]+[^/*])*[*]*"*/"|"--".*);
-	SPECIALS	= [:?"'/-];
+	SPECIALS	= ([:?"'/-] | "[");
 	MULTICHAR	= ([:]{2,}|[?]{2,});
 	ANYNOEOF	= [\001-\377];
 	*/
@@ -42,6 +42,32 @@ static int default_scanner(pdo_scanner_t *s)
 		COMMENTS								{ RET(PDO_PARSER_TEXT); }
 		(ANYNOEOF\SPECIALS)+ 					{ RET(PDO_PARSER_TEXT); }
 	*/
+}
+
+PDO_API int pdo_bracket_scanner(pdo_scanner_t *s)
+{
+	if (*s->cur == '[') {
+		const char *cursor = s->cur + 1;
+		const char *end = s->end - 1;
+
+		while (cursor < end) {
+			if (*cursor == ']') {
+				if (cursor + 1 < end && cursor[1] == ']') {
+					cursor += 2;
+					continue;
+				}
+				s->tok = s->cur;
+				s->cur = cursor + 1;
+				return PDO_PARSER_TEXT;
+			}
+			cursor++;
+		}
+		s->tok = s->cur;
+		s->cur = end;
+		return PDO_PARSER_TEXT;
+	}
+
+	return default_scanner(s);
 }
 
 struct placeholder {
