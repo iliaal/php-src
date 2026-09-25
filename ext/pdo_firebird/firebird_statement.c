@@ -89,20 +89,25 @@ static int get_formatted_time_tz(pdo_stmt_t *stmt, const ISC_TIME_TZ* timeTz, zv
 	char timeBuf[80] = {0};
 	char timeTzBuf[124] = {0};
 	if (fb_decode_time_tz(S->H->isc_status, timeTz, &hours, &minutes, &seconds, &fractions, sizeof(timeZoneBuffer), timeZoneBuffer)) {
-		return 1;
+		php_firebird_error_stmt(stmt);
+		return 0;
 	}
 	time = fb_encode_time(hours, minutes, seconds, fractions);
 	isc_decode_sql_time(&time, &t);
 	fmt = S->H->time_format ? S->H->time_format : PDO_FB_DEF_TIME_FMT;
+	if (fmt[0] == '\0') {
+		ZVAL_EMPTY_STRING(result);
+		return 1;
+	}
 
 	size_t len = strftime(timeBuf, sizeof(timeBuf), fmt, &t);
 	if (len == 0) {
-		return 1;
+		return 0;
 	}
 
 	size_t time_tz_len = sprintf(timeTzBuf, "%s %s", timeBuf, timeZoneBuffer);
 	ZVAL_STRINGL(result, timeTzBuf, time_tz_len);
-	return 0;
+	return 1;
 }
 
 /* fetch formatted timestamp with time zone */
@@ -117,22 +122,27 @@ static int get_formatted_timestamp_tz(pdo_stmt_t *stmt, const ISC_TIMESTAMP_TZ* 
 	char timestampBuf[80] = {0};
 	char timestampTzBuf[124] = {0};
 	if (fb_decode_timestamp_tz(S->H->isc_status, timestampTz, &year, &month, &day, &hours, &minutes, &seconds, &fractions, sizeof(timeZoneBuffer), timeZoneBuffer)) {
-		return 1;
+		php_firebird_error_stmt(stmt);
+		return 0;
 	}
 	ts.timestamp_date = fb_encode_date(year, month, day);
 	ts.timestamp_time = fb_encode_time(hours, minutes, seconds, fractions);
 	isc_decode_timestamp(&ts, &t);
 
 	fmt = S->H->timestamp_format ? S->H->timestamp_format : PDO_FB_DEF_TIMESTAMP_FMT;
+	if (fmt[0] == '\0') {
+		ZVAL_EMPTY_STRING(result);
+		return 1;
+	}
 
 	size_t len = strftime(timestampBuf, sizeof(timestampBuf), fmt, &t);
 	if (len == 0) {
-		return 1;
+		return 0;
 	}
 
 	size_t timestamp_tz_len = sprintf(timestampTzBuf, "%s %s", timestampBuf, timeZoneBuffer);
 	ZVAL_STRINGL(result, timestampTzBuf, timestamp_tz_len);
-	return 0;
+	return 1;
 }
 
 #endif
@@ -878,7 +888,11 @@ static int pdo_firebird_stmt_param_hook(pdo_stmt_t *stmt, struct pdo_bound_param
 			}
 			zval_ptr_dtor(parameter);
 			ZVAL_NULL(parameter);
-			return pdo_firebird_stmt_get_col(stmt, param->paramno, parameter, NULL);
+			int result = pdo_firebird_stmt_get_col(stmt, param->paramno, parameter, NULL);
+			if (!result && !strcmp(stmt->error_code, PDO_ERR_NONE)) {
+				pdo_raise_impl_error(stmt->dbh, stmt, "HY000", "failed to fetch column");
+			}
+			return result;
 		default:
 			;
 	}
