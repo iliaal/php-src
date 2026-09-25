@@ -861,36 +861,45 @@ static inline void kill_all_lockers(struct flock *mem_usage_check)
 	/* so that other process won't try to force while we are busy cleaning up */
 	ZCSG(force_restart_time) = 0;
 	while (mem_usage_check->l_pid > 0) {
+		pid_t locker_pid = mem_usage_check->l_pid;
 		/* Try SIGTERM first, switch to SIGKILL if not successful. */
 		int signal = SIGTERM;
-		errno = 0;
 		bool success = false;
 		int tries = 10;
 
-		while (tries--) {
-			zend_accel_error(ACCEL_LOG_WARNING, "Attempting to kill locker %d", mem_usage_check->l_pid);
-			if (kill(mem_usage_check->l_pid, signal)) {
+		while (tries >= 0) {
+			struct flock locker_check;
+
+			locker_check.l_type = F_WRLCK;
+			locker_check.l_whence = SEEK_SET;
+			locker_check.l_start = 1;
+			locker_check.l_len = 1;
+
+			if (fcntl(lock_file, F_GETLK, &locker_check) == -1) {
+				zend_accel_error(ACCEL_LOG_WARNING, "Failed to check locker %d: %s", locker_pid, strerror(errno));
+				break;
+			}
+			if (locker_check.l_type == F_UNLCK || locker_check.l_pid != locker_pid) {
+				success = true;
+				break;
+			}
+			if (tries-- == 0) {
+				break;
+			}
+
+			zend_accel_error(ACCEL_LOG_WARNING, "Attempting to kill locker %d", locker_pid);
+			if (kill(locker_pid, signal)) {
 				if (errno == ESRCH) {
 					/* Process died before the signal was sent */
 					success = true;
-					zend_accel_error(ACCEL_LOG_WARNING, "Process %d died before SIGKILL was sent", mem_usage_check->l_pid);
-				} else if (errno != 0) {
-					zend_accel_error(ACCEL_LOG_WARNING, "Failed to send SIGKILL to locker %d: %s", mem_usage_check->l_pid, strerror(errno));
+					zend_accel_error(ACCEL_LOG_WARNING, "Process %d died before signal was sent", locker_pid);
+				} else {
+					zend_accel_error(ACCEL_LOG_WARNING, "Failed to send signal %d to locker %d: %s", signal, locker_pid, strerror(errno));
 				}
 				break;
 			}
 			/* give it a chance to die */
 			usleep(20000);
-			if (kill(mem_usage_check->l_pid, 0)) {
-				if (errno == ESRCH) {
-					/* successfully killed locker, process no longer exists  */
-					success = true;
-					zend_accel_error(ACCEL_LOG_WARNING, "Killed locker %d", mem_usage_check->l_pid);
-				} else if (errno != 0) {
-					zend_accel_error(ACCEL_LOG_WARNING, "Failed to check locker %d: %s", mem_usage_check->l_pid, strerror(errno));
-				}
-				break;
-			}
 			usleep(10000);
 			/* If SIGTERM was not sufficient, use SIGKILL. */
 			signal = SIGKILL;
@@ -899,7 +908,7 @@ static inline void kill_all_lockers(struct flock *mem_usage_check)
 			/* errno is not ESRCH or we ran out of tries to kill the locker */
 			ZCSG(force_restart_time) = time(NULL); /* restore forced restart request */
 			/* cannot kill the locker, bail out with error */
-			zend_accel_error_noreturn(ACCEL_LOG_ERROR, "Cannot kill process %d!", mem_usage_check->l_pid);
+			zend_accel_error_noreturn(ACCEL_LOG_ERROR, "Cannot kill process %d!", locker_pid);
 		}
 
 		mem_usage_check->l_type = F_WRLCK;
