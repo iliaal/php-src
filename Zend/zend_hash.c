@@ -1647,9 +1647,13 @@ ZEND_API zend_result ZEND_FASTCALL zend_hash_str_del_ind(HashTable *ht, const ch
 					return FAILURE;
 				} else {
 					if (ht->pDestructor) {
-						ht->pDestructor(data);
+						zval tmp;
+						ZVAL_COPY_VALUE(&tmp, data);
+						ZVAL_UNDEF(data);
+						ht->pDestructor(&tmp);
+					} else {
+						ZVAL_UNDEF(data);
 					}
-					ZVAL_UNDEF(data);
 					HT_FLAGS(ht) |= HASH_FLAG_HAS_EMPTY_IND;
 				}
 			} else {
