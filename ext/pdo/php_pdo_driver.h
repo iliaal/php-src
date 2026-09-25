@@ -639,6 +639,7 @@ struct _pdo_stmt_t {
 	   that PDO declares.
     */
 	zend_object std;
+	HashTable *bound_column_index;
 };
 
 static inline pdo_stmt_t *php_pdo_stmt_fetch_object(zend_object *obj) {
