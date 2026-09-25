@@ -255,19 +255,6 @@ static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_
 	zval *parameter;
 	struct pdo_bound_param_data *pparam = NULL;
 
-	hash = is_param ? stmt->bound_params : stmt->bound_columns;
-
-	if (!hash) {
-		ALLOC_HASHTABLE(hash);
-		zend_hash_init(hash, 13, NULL, param_dtor, 0);
-
-		if (is_param) {
-			stmt->bound_params = hash;
-		} else {
-			stmt->bound_columns = hash;
-		}
-	}
-
 	if (!Z_ISREF(param->parameter)) {
 		parameter = &param->parameter;
 	} else {
@@ -282,6 +269,18 @@ static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_
 		convert_to_long(parameter);
 	} else if (PDO_PARAM_TYPE(param->param_type) == PDO_PARAM_BOOL && Z_TYPE_P(parameter) == IS_LONG) {
 		convert_to_boolean(parameter);
+	}
+	hash = is_param ? stmt->bound_params : stmt->bound_columns;
+
+	if (!hash) {
+		ALLOC_HASHTABLE(hash);
+		zend_hash_init(hash, 13, NULL, param_dtor, 0);
+
+		if (is_param) {
+			stmt->bound_params = hash;
+		} else {
+			stmt->bound_columns = hash;
+		}
 	}
 
 	param->stmt = stmt;
