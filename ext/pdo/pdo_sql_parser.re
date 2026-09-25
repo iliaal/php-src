@@ -232,25 +232,47 @@ safe:
 				goto clean_up;
 			}
 			if (stmt->dbh->methods->quoter) {
+				enum pdo_param_type param_type = param->param_type;
 				zval *parameter;
 				if (Z_ISREF(param->parameter)) {
 					parameter = Z_REFVAL(param->parameter);
 				} else {
 					parameter = &param->parameter;
 				}
-				if (param->param_type == PDO_PARAM_LOB && Z_TYPE_P(parameter) == IS_RESOURCE) {
+				if (param_type == PDO_PARAM_LOB && Z_TYPE_P(parameter) == IS_RESOURCE) {
 					php_stream *stm;
+					zval parameter_copy;
 
-					php_stream_from_zval_no_verify(stm, parameter);
+					ZVAL_COPY(&parameter_copy, parameter);
+					php_stream_from_zval_no_verify(stm, &parameter_copy);
 					if (stm) {
 						zend_string *buf;
 
 						buf = php_stream_copy_to_mem(stm, PHP_STREAM_COPY_ALL, 0);
+						zval_ptr_dtor(&parameter_copy);
 						if (!buf) {
 							buf = ZSTR_EMPTY_ALLOC();
 						}
+						params = stmt->bound_params;
+						if (!params) {
+							zend_string_release_ex(buf, 0);
+							ret = -1;
+							pdo_raise_impl_error(stmt->dbh, stmt, "HY093", "parameter was not defined");
+							goto clean_up;
+						}
+						if (query_type == PDO_PLACEHOLDER_POSITIONAL) {
+							param = zend_hash_index_find_ptr(params, plc->bindno);
+						} else {
+							param = zend_hash_str_find_ptr(params, plc->pos, plc->len);
+						}
+						if (!param) {
+							zend_string_release_ex(buf, 0);
+							ret = -1;
+							pdo_raise_impl_error(stmt->dbh, stmt, "HY093", "parameter was not defined");
+							goto clean_up;
+						}
 
-						plc->quoted = stmt->dbh->methods->quoter(stmt->dbh, buf, param->param_type);
+						plc->quoted = stmt->dbh->methods->quoter(stmt->dbh, buf, param_type);
 
 						if (buf) {
 							zend_string_release_ex(buf, 0);
@@ -263,12 +285,12 @@ safe:
 						}
 
 					} else {
+						zval_ptr_dtor(&parameter_copy);
 						pdo_raise_impl_error(stmt->dbh, stmt, "HY105", "Expected a stream resource");
 						ret = -1;
 						goto clean_up;
 					}
 				} else {
-					enum pdo_param_type param_type = param->param_type;
 					zend_string *buf = NULL;
 
 					/* assume all types are nullable */
@@ -291,15 +313,40 @@ safe:
 
 						default: {
 							buf = zval_try_get_string(parameter);
-							/* parameter does not have a string representation, buf == NULL */
 							if (EG(exception)) {
 								/* bork */
 								ret = -1;
 								strncpy(stmt->error_code, stmt->dbh->error_code, 6);
 								goto clean_up;
 							}
+							params = stmt->bound_params;
+							if (!params) {
+								if (buf) {
+									zend_string_release_ex(buf, 0);
+								}
+								ret = -1;
+								pdo_raise_impl_error(stmt->dbh, stmt, "HY093", "parameter was not defined");
+								goto clean_up;
+							}
+							if (query_type == PDO_PLACEHOLDER_POSITIONAL) {
+								param = zend_hash_index_find_ptr(params, plc->bindno);
+							} else {
+								param = zend_hash_str_find_ptr(params, plc->pos, plc->len);
+							}
+							if (!param) {
+								if (buf) {
+									zend_string_release_ex(buf, 0);
+								}
+								ret = -1;
+								pdo_raise_impl_error(stmt->dbh, stmt, "HY093", "parameter was not defined");
+								goto clean_up;
+							}
 
 							plc->quoted = stmt->dbh->methods->quoter(stmt->dbh, buf, param_type);
+							if (buf) {
+								zend_string_release_ex(buf, 0);
+								buf = NULL;
+							}
 							if (plc->quoted == NULL) {
 								/* bork */
 								ret = -1;
@@ -307,10 +354,6 @@ safe:
 								goto clean_up;
 							}
 						}
-					}
-
-					if (buf) {
-						zend_string_release_ex(buf, 0);
 					}
 				}
 			} else {
@@ -327,9 +370,12 @@ safe:
 
 rewrite:
 		/* allocate output buffer */
+		if (*outquery) {
+			zend_string_release(*outquery);
+			*outquery = NULL;
+		}
 		*outquery = zend_string_alloc(newbuffer_len, 0);
 		newbuffer = ZSTR_VAL(*outquery);
-
 		/* and build the query */
 		const char *ptr = ZSTR_VAL(inquery);
 		plc = placeholders;
