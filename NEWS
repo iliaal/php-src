@@ -31,7 +31,6 @@ PHP                                                                        NEWS
     evaluation). (David Carlier)
   . Fixed bug GH-23897 (php:function() assertion failure after a failed
     registerPHPFunctions()). (David Carlier)
-
 - FTP:
   . Fixed bug GH-23619 (cryptic error on servers that don't support TLS
     session resumption on data connection). (ndossche)
@@ -91,6 +90,10 @@ PHP                                                                        NEWS
   . Fixed exceptions from user-defined create_sid() handlers being replaced
     by return-value validation errors. (Ilia Alshanetsky)
 
+- SimpleXML:
+  . Fixed reconstructing a SimpleXMLElement freeing a child element that
+    another variable still references. (Ilia Alshanetsky)
+
 - Sockets:
   . Fixed socket_select() silently truncating sets larger than FD_SETSIZE on
     Windows. (David Carlier)
@@ -119,7 +122,6 @@ PHP                                                                        NEWS
     (David Carlier)
   . Fixed bug GH-23747 (ZipArchive::close() use-after-free from a progress or
     cancel callback). (David Carlier)
-
 
 24 Sep 2026, PHP 8.4.26
 
