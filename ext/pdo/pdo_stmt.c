@@ -383,11 +383,35 @@ static bool really_register_bound_param(struct pdo_bound_param_data *param, pdo_
 }
 /* }}} */
 
+static bool pdo_stmt_do_next_rowset(pdo_stmt_t *stmt);
+
+static void pdo_stmt_invalidate_result(pdo_stmt_t *stmt)
+{
+	if (stmt->methods->cursor_closer) {
+		stmt->methods->cursor_closer(stmt);
+	} else {
+		do {
+			while (stmt->methods->fetcher(stmt, PDO_FETCH_ORI_NEXT, 0))
+				;
+			if (!stmt->methods->next_rowset) {
+				break;
+			}
+
+			if (!pdo_stmt_do_next_rowset(stmt)) {
+				break;
+			}
+		} while (1);
+	}
+
+	stmt->executed = 0;
+}
+
 /* {{{ Execute a prepared statement, optionally binding parameters */
 PHP_METHOD(PDOStatement, execute)
 {
 	zval *input_params = NULL;
 	int ret = 1;
+	bool report_error = true;
 
 	ZEND_PARSE_PARAMETERS_START(0, 1)
 		Z_PARAM_OPTIONAL
@@ -429,7 +453,8 @@ PHP_METHOD(PDOStatement, execute)
 				if (!Z_ISUNDEF(param.parameter)) {
 					zval_ptr_dtor(&param.parameter);
 				}
-				RETURN_FALSE;
+				report_error = false;
+				goto execute_failure;
 			}
 		} ZEND_HASH_FOREACH_END();
 	}
@@ -453,12 +478,11 @@ PHP_METHOD(PDOStatement, execute)
 			stmt->active_query_string = zend_string_copy(stmt->query_string);
 			ret = 1;
 		} else if (ret == -1) {
-			/* something broke */
-			RETURN_FALSE;
+			report_error = false;
+			goto execute_failure;
 		}
 	} else if (!dispatch_param_event(stmt, PDO_PARAM_EVT_EXEC_PRE)) {
-		PDO_HANDLE_STMT_ERR();
-		RETURN_FALSE;
+		goto execute_failure;
 	}
 	if (stmt->methods->executer(stmt)) {
 		if (!stmt->executed) {
@@ -474,13 +498,22 @@ PHP_METHOD(PDOStatement, execute)
 		}
 
 		if (ret && !dispatch_param_event(stmt, PDO_PARAM_EVT_EXEC_POST)) {
-			PDO_HANDLE_STMT_ERR();
-			RETURN_FALSE;
+			goto execute_failure;
 		}
 
-		RETURN_BOOL(ret);
+		if (!ret) {
+			report_error = false;
+			goto execute_failure;
+		}
+
+		RETURN_TRUE;
 	}
-	PDO_HANDLE_STMT_ERR();
+
+execute_failure:
+	pdo_stmt_invalidate_result(stmt);
+	if (report_error) {
+		PDO_HANDLE_STMT_ERR();
+	}
 	RETURN_FALSE;
 }
 /* }}} */
