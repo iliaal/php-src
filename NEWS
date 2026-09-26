@@ -91,10 +91,13 @@ PHP                                                                        NEWS
   . Fixed exceptions from user-defined create_sid() handlers being replaced
     by return-value validation errors. (Ilia Alshanetsky)
 
+- SOAP:
+  . Fixed the SOAP client accepting a response body shorter than its
+    Content-Length and reusing the connection. (Ilia Alshanetsky)
+
 - Sockets:
   . Fixed socket_select() silently truncating sets larger than FD_SETSIZE on
     Windows. (David Carlier)
-
 - SPL:
   . Fixed SplFixedArray::setSize() doing nothing on subclasses whose
     constructor does not call parent::__construct(). (Marc Bennewitz)
@@ -119,7 +122,6 @@ PHP                                                                        NEWS
     (David Carlier)
   . Fixed bug GH-23747 (ZipArchive::close() use-after-free from a progress or
     cancel callback). (David Carlier)
-
 
 24 Sep 2026, PHP 8.4.26
 
