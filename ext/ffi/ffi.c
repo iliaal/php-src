@@ -923,7 +923,8 @@ static void zend_ffi_callback_hash_dtor(zval *zv) /* {{{ */
 	zend_ffi_callback_data *callback_data = Z_PTR_P(zv);
 
 	ffi_closure_free(callback_data->callback);
-	if (callback_data->fcc.function_handler->common.fn_flags & ZEND_ACC_CLOSURE) {
+	if (callback_data->fcc.function_handler
+	 && callback_data->fcc.function_handler->common.fn_flags & ZEND_ACC_CLOSURE) {
 		OBJ_RELEASE(ZEND_CLOSURE_OBJECT(callback_data->fcc.function_handler));
 	}
 	for (int i = 0; i < callback_data->arg_count; ++i) {
