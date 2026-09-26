@@ -502,6 +502,7 @@ PHP_METHOD(PDOStatement, execute)
 		}
 
 		if (!ret) {
+			report_error = false;
 			goto execute_failure;
 		}
 
