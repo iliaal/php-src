@@ -339,7 +339,8 @@ const mbfl_encoding *mbfl_name2encoding_ex(const char *name, size_t name_len)
 			int8_t offset = mbfl_encoding_ptr_list_after_hashing[key];
 			if (offset >= 0) {
 				encoding = mbfl_encoding_ptr_list + offset;
-				if (strncasecmp((*encoding)->name, name, name_len) == 0) {
+				size_t encoding_name_len = strlen((*encoding)->name);
+				if (encoding_name_len == name_len && strncasecmp((*encoding)->name, name, name_len) == 0) {
 					return *encoding;
 				}
 			}
