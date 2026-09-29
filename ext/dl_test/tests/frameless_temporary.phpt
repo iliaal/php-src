@@ -12,6 +12,11 @@ $setarch = trim((string) shell_exec('command -v setarch'));
 if ($setarch === '') {
     die('skip setarch -R is required so dl() remaps the extension at the stale handler address');
 }
+$arch = php_uname('m');
+exec($setarch . ' ' . escapeshellarg($arch) . ' -R true', $setarch_out, $setarch_code);
+if ($setarch_code !== 0) {
+    die('skip setarch -R cannot run on ' . $arch);
+}
 $so = ini_get('extension_dir') . DIRECTORY_SEPARATOR . 'dl_test.so';
 if (!file_exists($so)) {
     die('skip dl_test extension is not built (tried ' . $so . ')');
