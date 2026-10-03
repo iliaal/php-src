@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <signal.h>
 #include <errno.h>
 
 #ifndef MAXFQDNLEN
@@ -244,7 +245,7 @@ static HashTable fcgi_mgmt_vars;
 
 static int is_initialized = 0;
 static int is_fastcgi = 0;
-static int in_shutdown = 0;
+static volatile sig_atomic_t in_shutdown = 0;
 static sa_t *allowed_clients = NULL;
 static sa_t client_sa;
 
