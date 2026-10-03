@@ -239,6 +239,10 @@ der_data(char *buf, size_t blen, uint32_t tag, const void *q, uint32_t len)
 {
 	uint32_t i;
 	const uint8_t *d = CAST(const uint8_t *, q);
+	if (len == 0) {
+		buf[0] = '\0';
+		return 0;
+	}
 	switch (tag) {
 	case DER_TAG_PRINTABLE_STRING:
 	case DER_TAG_UTF8_STRING:
