@@ -418,6 +418,8 @@ static int fpm_unix_conf_wp(struct fpm_worker_pool_s *wp) /* {{{ */
 				if (pwd) {
 					wp->set_gid = pwd->pw_gid;
 					wp->set_user = strdup(pwd->pw_name);
+				} else {
+					wp->set_gid = wp->set_uid;
 				}
 			} else {
 				struct passwd *pwd;
