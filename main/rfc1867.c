@@ -256,7 +256,7 @@ static multipart_buffer *multipart_buffer_new(char *boundary, int boundary_len)
 {
 	multipart_buffer *self = (multipart_buffer *) ecalloc(1, sizeof(multipart_buffer));
 
-	int minsize = boundary_len + 6;
+	int minsize = boundary_len + 10;
 	if (minsize < FILLUNIT) minsize = FILLUNIT;
 
 	self->buffer = (char *) ecalloc(1, minsize + 1);
@@ -576,22 +576,104 @@ static void *php_ap_memstr(char *haystack, int haystacklen, char *needle, int ne
 	return ptr;
 }
 
+static char *multipart_buffer_find_boundary(multipart_buffer *self, bool *complete)
+{
+	char *bound = php_ap_memstr(self->buf_begin, self->bytes_in_buffer, self->boundary_next, self->boundary_next_len, 1);
+
+	while (bound) {
+		size_t offset = bound - self->buf_begin;
+		size_t available = offset + (size_t) self->boundary_next_len < (size_t) self->bytes_in_buffer
+			? (size_t) self->bytes_in_buffer - offset - (size_t) self->boundary_next_len
+			: 0;
+		if (available == 0) {
+			*complete = false;
+			return bound;
+		}
+		char *suffix = bound + self->boundary_next_len;
+		bool closing = *suffix == '-';
+		if (closing && available == 1) {
+			*complete = false;
+			return bound;
+		}
+		if (!closing && *suffix != '\r' && *suffix != '\n' && *suffix != ' ' && *suffix != '\t') {
+			bound = php_ap_memstr(bound + 1, (size_t) self->bytes_in_buffer - (size_t) (bound + 1 - self->buf_begin), self->boundary_next, self->boundary_next_len, 1);
+			continue;
+		}
+		if (!closing && *suffix == '\r' && available == 1) {
+			*complete = false;
+			return bound;
+		}
+		if (closing) {
+			if (available == 1) {
+				*complete = false;
+				return bound;
+			}
+			if (suffix[1] != '-') {
+				bound = php_ap_memstr(bound + 1, (size_t) self->bytes_in_buffer - (size_t) (bound + 1 - self->buf_begin), self->boundary_next, self->boundary_next_len, 1);
+				continue;
+			}
+			suffix += 2;
+			available -= 2;
+		}
+		while (available > 0 && (*suffix == ' ' || *suffix == '\t')) {
+			suffix++;
+			available--;
+		}
+		if (available == 0) {
+			*complete = false;
+			return bound;
+		}
+		if (*suffix == '\r' && available == 1) {
+			*complete = false;
+			return bound;
+		}
+		if (*suffix == '\n') {
+			*complete = true;
+			return bound;
+		}
+		if (*suffix == '\r' && available > 1 && suffix[1] == '\n') {
+			*complete = true;
+			return bound;
+		}
+
+		bound = php_ap_memstr(bound + 1, (size_t) self->bytes_in_buffer - (size_t) (bound + 1 - self->buf_begin), self->boundary_next, self->boundary_next_len, 1);
+	}
+
+	return NULL;
+}
+
 /* read until a boundary condition */
 static size_t multipart_buffer_read(multipart_buffer *self, char *buf, size_t bytes, int *end)
 {
 	size_t len, max;
 	char *bound;
+	bool complete;
+	int eof = 0;
 
 	/* fill buffer if needed */
 	if (bytes > (size_t)self->bytes_in_buffer) {
-		fill_buffer(self);
+		eof = fill_buffer(self) < 1;
 	}
 
-	/* look for a potential boundary match, only read data up to that point */
-	if ((bound = php_ap_memstr(self->buf_begin, self->bytes_in_buffer, self->boundary_next, self->boundary_next_len, 1))) {
+	bound = multipart_buffer_find_boundary(self, &complete);
+	if (bound && !complete && bound == self->buf_begin) {
+		eof = fill_buffer(self) < 1;
+		bound = multipart_buffer_find_boundary(self, &complete);
+	}
+	if (eof && bound && !complete) {
+		size_t offset = bound - self->buf_begin;
+		if (offset + (size_t) self->boundary_next_len + 2 <= (size_t) self->bytes_in_buffer
+			&& bound[self->boundary_next_len] == '-' && bound[self->boundary_next_len + 1] == '-') {
+			complete = true;
+		}
+	}
+	if (bound && !complete && eof && bound == self->buf_begin) {
+		bound = NULL;
+	}
+	if (bound) {
 		max = bound - self->buf_begin;
-		if (end && php_ap_memstr(self->buf_begin, self->bytes_in_buffer, self->boundary_next, self->boundary_next_len, 0)) {
-			*end = 1;
+		if (end) {
+			*end = complete;
 		}
 	} else {
 		max = self->bytes_in_buffer;
@@ -607,6 +689,11 @@ static size_t multipart_buffer_read(multipart_buffer *self, char *buf, size_t by
 		memcpy(buf, self->buf_begin, len);
 		buf[len] = 0;
 
+		if (bound && len == 1 && buf[0] == '\r') {
+			self->bytes_in_buffer--;
+			self->buf_begin++;
+			return 0;
+		}
 		if (bound && len > 0 && buf[len-1] == '\r') {
 			buf[--len] = 0;
 		}
