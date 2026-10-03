@@ -275,8 +275,9 @@ static int pdo_mysql_stmt_execute_prepared_libmysql(pdo_stmt_t *stmt) /* {{{ */
 		}
 		pdo_mysql_error_stmt(stmt);
 		if (mysql_stmt_errno(S->stmt) == 2057) {
-			/* CR_NEW_STMT_METADATA makes the statement unusable */
+			mysql_stmt_close(S->stmt);
 			S->stmt = NULL;
+			stmt->supports_placeholders = PDO_PLACEHOLDER_NONE;
 		}
 		PDO_DBG_RETURN(0);
 	}
