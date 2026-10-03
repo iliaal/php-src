@@ -493,8 +493,9 @@ PHP_FUNCTION(file_put_contents)
 		RETURN_FALSE;
 	}
 
-	if (mode[0] == 'c') {
-		php_stream_truncate_set_size(stream, 0);
+	if (mode[0] == 'c' && php_stream_truncate_set_size(stream, 0) != PHP_STREAM_OPTION_RETURN_OK) {
+		php_stream_close(stream);
+		RETURN_FALSE;
 	}
 
 	switch (Z_TYPE_P(data)) {
