@@ -75,10 +75,15 @@ static const char _codes[26] =
 /*  a  b c  d e f g  h i j k l m n o p q r s t u v w x y z */
 };
 
+static zend_always_inline bool is_ascii_alpha(unsigned char c)
+{
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
 
 /* Note: these functions require an uppercase letter input! */
-static zend_always_inline char encode(char c) {
-	if (isalpha((unsigned char)c)) {
+static zend_always_inline char encode(unsigned char c) {
+	if (is_ascii_alpha(c)) {
 		ZEND_ASSERT(c >= 'A' && c <= 'Z');
 		return _codes[(c - 'A')];
 	} else {
@@ -107,7 +112,7 @@ static zend_always_inline char encode(char c) {
 /* I suppose I could have been using a character pointer instead of
  * accessing the array directly... */
 
-#define Convert_Raw(c) toupper((unsigned char)c)
+#define Convert_Raw(c) zend_toupper_ascii((unsigned char)(c))
 /* Look at the next letter in the word */
 #define Read_Raw_Next_Letter (word[w_idx+1])
 #define Read_Next_Letter (Convert_Raw(Read_Raw_Next_Letter))
@@ -121,7 +126,7 @@ static zend_always_inline char encode(char c) {
 /* Look two letters down.  It makes sure you don't walk off the string. */
 #define Read_After_Next_Letter	(Read_Raw_Next_Letter != '\0' ? Convert_Raw(word[w_idx+2]) \
 											     : '\0')
-#define Look_Ahead_Letter(n) (toupper((unsigned char)Lookahead((char *) word+w_idx, n)))
+#define Look_Ahead_Letter(n) zend_toupper_ascii(Lookahead((char *) word+w_idx, n))
 
 
 /* Allows us to safely look ahead an arbitrary # of letters */
@@ -163,7 +168,7 @@ static char Lookahead(char *word, size_t how_far)
 #define Phone_Len	(p_idx)
 
 /* Note is a letter is a 'break' in the word */
-#define Isbreak(c)  (!isalpha((unsigned char)(c)))
+#define Isbreak(c)  (!is_ascii_alpha((unsigned char)(c)))
 
 /* {{{ metaphone */
 static void metaphone(unsigned char *word, size_t word_len, zend_long max_phonemes, zend_string **phoned_word, int traditional)
@@ -187,7 +192,7 @@ static void metaphone(unsigned char *word, size_t word_len, zend_long max_phonem
 
 /*-- The first phoneme has to be processed specially. --*/
 	/* Find our first letter */
-	for (; !isalpha((unsigned char)(curr_letter = Read_Raw_Curr_Letter)); w_idx++) {
+	for (; !is_ascii_alpha(curr_letter = Read_Raw_Curr_Letter); w_idx++) {
 		/* On the off chance we were given nothing but crap... */
 		if (curr_letter == '\0') {
 			End_Phoned_Word();
@@ -275,7 +280,7 @@ static void metaphone(unsigned char *word, size_t word_len, zend_long max_phonem
 		 */
 
 		/* Ignore non-alphas */
-		if (!isalpha((unsigned char)curr_letter))
+		if (!is_ascii_alpha(curr_letter))
 			continue;
 
 		curr_letter = Convert_Raw(curr_letter);
