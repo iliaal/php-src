@@ -806,6 +806,13 @@ static inline int object_common(UNSERIALIZE_PARAMETER, zend_long elements, bool 
 			return 0;
 		}
 
+		if (!finish_nested_data(UNSERIALIZE_PASSTHRU)) {
+			ZVAL_DEREF(rval);
+			GC_ADD_FLAGS(Z_OBJ_P(rval), IS_OBJ_DESTRUCTOR_CALLED);
+			zval_ptr_dtor(&ary);
+			return 0;
+		}
+
 		/* Delay __unserialize() call until end of serialization. We use two slots here to
 		 * store both the object and the unserialized data array. */
 		ZVAL_DEREF(rval);
@@ -815,7 +822,7 @@ static inline int object_common(UNSERIALIZE_PARAMETER, zend_long elements, bool 
 		tmp++;
 		ZVAL_COPY_VALUE(tmp, &ary);
 
-		return finish_nested_data(UNSERIALIZE_PASSTHRU);
+		return 1;
 	}
 
 	has_wakeup = Z_OBJCE_P(rval) != PHP_IC_ENTRY
