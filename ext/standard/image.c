@@ -397,14 +397,15 @@ static int php_skip_variable(php_stream * stream)
 static size_t php_read_stream_all_chunks(php_stream *stream, char *buffer, size_t length)
 {
 	size_t read_total = 0;
-	do {
+
+	while (read_total < length) {
 		ssize_t read_now = php_stream_read(stream, buffer, length - read_total);
-		read_total += read_now;
-		if (read_now < stream->chunk_size && read_total != length) {
+		if (read_now <= 0) {
 			return 0;
 		}
+		read_total += read_now;
 		buffer += read_now;
-	} while (read_total < length);
+	}
 
 	return read_total;
 }
@@ -793,7 +794,7 @@ static struct gfxinfo *php_handle_tiff (php_stream * stream, zval *info, int mot
 	dir_size = 2/*num dir entries*/ +12/*length of entry*/*num_entries +4/* offset to next ifd (points to thumbnail or NULL)*/;
 	ifd_size = dir_size;
 	ifd_data = erealloc(ifd_data,ifd_size);
-	if (php_stream_read(stream, ifd_data+2, dir_size-2) != dir_size-2) {
+	if (php_read_stream_all_chunks(stream, ifd_data+2, dir_size-2) != dir_size-2) {
 		efree(ifd_data);
 		return NULL;
 	}
