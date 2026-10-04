@@ -146,7 +146,7 @@ static const php_stream_ops php_stream_input_ops = {
 	NULL  /* set_option */
 };
 
-static void php_stream_apply_filter_list(php_stream *stream, char *filterlist, int read_chain, int write_chain) /* {{{ */
+static zend_result php_stream_apply_filter_list(php_stream *stream, char *filterlist, int read_chain, int write_chain)
 {
 	char *p, *token = NULL;
 	php_stream_filter *temp_filter;
@@ -159,6 +159,7 @@ static void php_stream_apply_filter_list(php_stream *stream, char *filterlist, i
 				php_stream_filter_append(&stream->readfilters, temp_filter);
 			} else {
 				php_error_docref(NULL, E_WARNING, "Unable to create filter (%s)", p);
+				return FAILURE;
 			}
 		}
 		if (write_chain) {
@@ -166,10 +167,12 @@ static void php_stream_apply_filter_list(php_stream *stream, char *filterlist, i
 				php_stream_filter_append(&stream->writefilters, temp_filter);
 			} else {
 				php_error_docref(NULL, E_WARNING, "Unable to create filter (%s)", p);
+				return FAILURE;
 			}
 		}
 		p = php_strtok_r(NULL, "|", &token);
 	}
+	return SUCCESS;
 }
 /* }}} */
 
@@ -357,22 +360,26 @@ static php_stream * php_stream_url_wrap_php(php_stream_wrapper *wrapper, const c
 			return NULL;
 		}
 
+		zend_result safl_result = SUCCESS;
 		*p = '\0';
 
 		p = php_strtok_r(pathdup + 1, "/", &token);
 		while (p) {
 			if (!strncasecmp(p, "read=", 5)) {
-				php_stream_apply_filter_list(stream, p + 5, 1, 0);
+				safl_result = php_stream_apply_filter_list(stream, p + 5, 1, 0);
 			} else if (!strncasecmp(p, "write=", 6)) {
-				php_stream_apply_filter_list(stream, p + 6, 0, 1);
+				safl_result = php_stream_apply_filter_list(stream, p + 6, 0, 1);
 			} else {
-				php_stream_apply_filter_list(stream, p, mode_rw & PHP_STREAM_FILTER_READ, mode_rw & PHP_STREAM_FILTER_WRITE);
+				safl_result = php_stream_apply_filter_list(stream, p, mode_rw & PHP_STREAM_FILTER_READ, mode_rw & PHP_STREAM_FILTER_WRITE);
+			}
+			if (safl_result == FAILURE) {
+				break;
 			}
 			p = php_strtok_r(NULL, "/", &token);
 		}
 		efree(pathdup);
 
-		if (EG(exception)) {
+		if (safl_result == FAILURE || EG(exception)) {
 			php_stream_close(stream);
 			return NULL;
 		}
