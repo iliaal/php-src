@@ -12,7 +12,7 @@ runs:
     - name: FreeBSD
       uses: vmactions/freebsd-vm@v1
       with:
-        release: '13.5'
+        release: '14.5'
         usesh: true
         copyback: false
         disable-cache: true
@@ -24,6 +24,17 @@ runs:
           OPCACHE_TLS_TESTS_DEPS="gcc"
 
           kldload accf_http
+          kldload cc_newreno
+
+          # Restore locale categories omitted from FreeBSD 14's install lists.
+          ln -s ../nl_NL.ISO8859-15/LC_MESSAGES /usr/share/locale/nl_BE.ISO8859-1/LC_MESSAGES
+          ln -s ../nl_NL.ISO8859-15/LC_MESSAGES /usr/share/locale/nl_BE.ISO8859-15/LC_MESSAGES
+          ln -s ../sl_SI.ISO8859-2/LC_MESSAGES /usr/share/locale/hr_HR.ISO8859-2/LC_MESSAGES
+          ln -s ../sl_SI.ISO8859-2/LC_MESSAGES /usr/share/locale/sr_RS.ISO8859-2/LC_MESSAGES
+          fetch -o /tmp/zh_TW.Big5.src \
+            https://raw.githubusercontent.com/freebsd/freebsd-src/4099b5c828800776fda3eccd6537ceed638a2a8b/share/numericdef/zh_TW.Big5.src
+          grep -v -E '^(#$|# )' /tmp/zh_TW.Big5.src > /usr/share/locale/zh_TW.Big5/LC_NUMERIC
+
           pkg install -y \
             autoconf \
             bison \
