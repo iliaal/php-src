@@ -1,0 +1,14 @@
+name: FreeBSD 14.5 validation
+on:
+  push:
+    branches:
+      - ci-validate-freebsd145-20261015
+permissions:
+  contents: read
+jobs:
+  FREEBSD:
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      all_variations: false
+      branch: >-
+        {"name":"FreeBSD 14.5","ref":"9e94eb37dee6e6cad9dd0863112bcff29ba5ea1d","version":[8,4],"jobs":{"FREEBSD":{"matrix":{"zts":[false]}}}}
