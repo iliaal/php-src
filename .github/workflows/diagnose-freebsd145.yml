@@ -1,0 +1,72 @@
+name: FreeBSD 14.5 diagnostics
+on:
+  push:
+    branches:
+      - ci-diagnose-freebsd145-20261015
+permissions:
+  contents: read
+jobs:
+  FREEBSD:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          release: '14.5'
+          usesh: true
+          copyback: false
+          disable-cache: true
+          run: |
+            set -eu
+            uname -a
+            sysctl net.inet.tcp.cc.available
+            ls -l /boot/kernel/cc_newreno.ko
+            kldload cc_newreno
+            sysctl net.inet.tcp.cc.available
+            cc -x c -o /tmp/locale-probe - <<'C'
+            #include <errno.h>
+            #include <locale.h>
+            #include <stdio.h>
+            #include <string.h>
+
+            int main(void)
+            {
+                const char *locales[] = {
+                    "C", "en_US.UTF-8", "hr_HR.ISO8859-2",
+                    "nl_BE.ISO8859-1", "nl_BE.ISO8859-15",
+                    "sr_RS.ISO8859-2", "zh_TW.Big5"
+                };
+                int categories[] = {
+                    LC_COLLATE, LC_CTYPE, LC_MONETARY, LC_NUMERIC,
+                    LC_TIME, LC_MESSAGES, LC_ALL
+                };
+                const char *category_names[] = {
+                    "LC_COLLATE", "LC_CTYPE", "LC_MONETARY", "LC_NUMERIC",
+                    "LC_TIME", "LC_MESSAGES", "LC_ALL"
+                };
+                for (size_t i = 0; i < sizeof(locales) / sizeof(locales[0]); i++) {
+                    for (size_t j = 0; j < sizeof(categories) / sizeof(categories[0]); j++) {
+                        setlocale(LC_ALL, "C");
+                        errno = 0;
+                        const char *result = setlocale(categories[j], locales[i]);
+                        int error = errno;
+                        printf("%s %s: %s; errno=%d (%s)\n", locales[i],
+                            category_names[j], result ? result : "NULL", error,
+                            strerror(error));
+                    }
+                }
+                return 0;
+            }
+            C
+            /tmp/locale-probe
+            for locale_name in hr_HR.ISO8859-2 nl_BE.ISO8859-1 nl_BE.ISO8859-15 sr_RS.ISO8859-2 zh_TW.Big5; do
+              ls -la "/usr/share/locale/$locale_name"
+              for category in LC_COLLATE LC_CTYPE LC_MONETARY LC_NUMERIC LC_TIME LC_MESSAGES; do
+                locale_file="/usr/share/locale/$locale_name/$category"
+                if test -f "$locale_file"; then
+                  file -L "$locale_file"
+                else
+                  printf 'Missing locale file: %s\n' "$locale_file"
+                fi
+              done
+            done
