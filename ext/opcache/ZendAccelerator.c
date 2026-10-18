@@ -578,6 +578,9 @@ static zend_string* ZEND_FASTCALL accel_new_interned_string_for_php(zend_string 
 			return ret;
 		}
 	}
+	if (!ZSTR_IS_INTERNED(str) && (GC_FLAGS(str) & GC_PERSISTENT)) {
+		GC_MAKE_PERSISTENT_LOCAL(str);
+	}
 	return str;
 }
 
@@ -602,19 +605,27 @@ static zend_always_inline zend_string *accel_find_interned_string_ex(zend_ulong 
 
 static zend_string* ZEND_FASTCALL accel_init_interned_string_for_php(const char *str, size_t size, bool permanent)
 {
+	zend_string *ret;
+
 	if (ZCG(counted)) {
 	    zend_ulong h = zend_inline_hash_func(str, size);
-		zend_string *ret = accel_find_interned_string_ex(h, str, size);
+		ret = accel_find_interned_string_ex(h, str, size);
 
-		if (!ret) {
-			ret = zend_string_init(str, size, permanent);
-			ZSTR_H(ret) = h;
+		if (ret) {
+			return ret;
 		}
 
-		return ret;
+		ret = zend_string_init(str, size, permanent);
+		ZSTR_H(ret) = h;
+	} else {
+		ret = zend_string_init(str, size, permanent);
 	}
 
-	return zend_string_init(str, size, permanent);
+	if (permanent) {
+		GC_MAKE_PERSISTENT_LOCAL(ret);
+	}
+
+	return ret;
 }
 
 static inline void accel_copy_permanent_list_types(
