@@ -22,6 +22,8 @@
 # define _GNU_SOURCE
 #endif
 
+#include <limits.h>
+
 #include "php.h"
 #include "zend_exceptions.h"
 #include "php_ini.h"
@@ -1376,7 +1378,6 @@ static int pdo_firebird_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* 
 		{ "password", NULL, 0 }
 	};
 	int i, ret = 0;
-	short buf_len = 256, dpb_len;
 
 	pdo_firebird_db_handle *H = dbh->driver_data = pecalloc(1,sizeof(*H),dbh->is_persistent);
 
@@ -1409,6 +1410,9 @@ static int pdo_firebird_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* 
 			isc_dpb_user_name, isc_dpb_password, isc_dpb_lc_ctype, isc_dpb_sql_role_name };
 		char const *dpb_values[] = { dbh->username, dbh->password, vars[1].optval, vars[2].optval };
 		char dpb_buffer[256] = { isc_dpb_version1 }, *dpb;
+		size_t buf_len = sizeof(dpb_buffer) - 1;
+		size_t dpb_value_len;
+		int dpb_len;
 
 		if (EG(exception)) {
 			break;
@@ -1418,12 +1422,22 @@ static int pdo_firebird_handle_factory(pdo_dbh_t *dbh, zval *driver_options) /* 
 
 		/* loop through all the provided arguments and set dpb fields accordingly */
 		for (i = 0; i < sizeof(dpb_flags); ++i) {
-			if (dpb_values[i] && buf_len > 0) {
-				dpb_len = slprintf(dpb, buf_len, "%c%c%s", dpb_flags[i], (unsigned char)strlen(dpb_values[i]),
+			if (dpb_values[i]) {
+				dpb_value_len = strlen(dpb_values[i]);
+				if (dpb_value_len > UCHAR_MAX || dpb_value_len + 2 >= buf_len) {
+					zend_value_error("Firebird database parameter value is too long");
+					break;
+				}
+
+				dpb_len = slprintf(dpb, buf_len, "%c%c%s", dpb_flags[i], (unsigned char)dpb_value_len,
 					dpb_values[i]);
 				dpb += dpb_len;
 				buf_len -= dpb_len;
 			}
+		}
+
+		if (EG(exception)) {
+			break;
 		}
 
 		H->sql_dialect = PDO_FB_DIALECT;
