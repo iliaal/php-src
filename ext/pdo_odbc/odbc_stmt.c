@@ -130,6 +130,9 @@ static void free_cols(pdo_stmt_t *stmt, pdo_odbc_stmt *S)
 			if (S->cols[i].data) {
 				efree(S->cols[i].data);
 			}
+			if (S->cols[i].long_data) {
+				zend_string_release(S->cols[i].long_data);
+			}
 		}
 		efree(S->cols);
 		S->cols = NULL;
@@ -618,6 +621,15 @@ static int odbc_stmt_fetch(pdo_stmt_t *stmt,
 			return 0;
 	}
 	rc = SQLFetchScroll(S->stmt, odbcori, offset);
+	if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
+		for (int i = 0; i < S->col_count; i++) {
+			if (S->cols[i].long_data) {
+				zend_string_release(S->cols[i].long_data);
+				S->cols[i].long_data = NULL;
+			}
+			S->cols[i].long_data_loaded = 0;
+		}
+	}
 
 	if (rc == SQL_SUCCESS) {
 		return 1;
@@ -730,8 +742,18 @@ static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result, enum pdo
 	pdo_odbc_stmt *S = (pdo_odbc_stmt*)stmt->driver_data;
 	pdo_odbc_column *C = &S->cols[colno];
 
-	/* if it is a column containing "long" data, perform late binding now */
 	if (C->is_long) {
+		if (C->long_data_loaded) {
+			if (C->long_data) {
+				ZVAL_STR(result, zend_string_copy(C->long_data));
+				if (C->is_unicode) {
+					goto unicode_conv;
+				}
+			} else {
+				ZVAL_NULL(result);
+			}
+			return 1;
+		}
 		SQLLEN orig_fetched_len = SQL_NULL_DATA;
 		RETCODE rc;
 
@@ -740,12 +762,19 @@ static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result, enum pdo
 		 * bigger buffer for the caller to free */
 
 		rc = SQLGetData(S->stmt, colno+1, C->is_unicode ? SQL_C_BINARY : SQL_C_CHAR, C->data,
- 			256, &C->fetched_len);
+			256, &C->fetched_len);
+		if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+			pdo_odbc_stmt_error("SQLGetData");
+			return 0;
+		}
 		orig_fetched_len = C->fetched_len;
-
 		if (rc == SQL_SUCCESS && C->fetched_len < 256) {
-			/* all the data fit into our little buffer;
-			 * jump down to the generic bound data case */
+			if (C->fetched_len < 0) {
+				C->long_data_loaded = 1;
+			} else {
+				C->long_data = zend_string_init(C->data, C->fetched_len, 0);
+				C->long_data_loaded = 1;
+			}
 			goto in_data;
 		}
 
@@ -768,6 +797,16 @@ static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result, enum pdo
 				/* read block. 256 bytes => 255 bytes are actually read, the last 1 is NULL */
 				rc = SQLGetData(S->stmt, colno+1, C->is_unicode ? SQL_C_BINARY : SQL_C_CHAR, buf2, 256, &C->fetched_len);
 
+				if (rc == SQL_NO_DATA) {
+					break;
+				}
+				if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+					efree(buf2);
+					zend_string_release(str);
+					pdo_odbc_stmt_error("SQLGetData");
+					return 0;
+				}
+
 				/* adjust `used` in case we have proper length info from the driver */
 				if (orig_fetched_len >= 0 && C->fetched_len >= 0) {
 					SQLLEN fixed_used = orig_fetched_len - C->fetched_len;
@@ -789,7 +828,6 @@ static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result, enum pdo
 					memcpy(ZSTR_VAL(str) + used, buf2, C->fetched_len);
 					used = used + C->fetched_len;
 				} else {
-					/* includes SQL_NO_DATA */
 					break;
 				}
 
@@ -799,7 +837,12 @@ static int odbc_stmt_get_col(pdo_stmt_t *stmt, int colno, zval *result, enum pdo
 
 			/* NULL terminate the buffer once, when finished, for use with the rest of PHP */
 			ZSTR_VAL(str)[used] = '\0';
-			ZVAL_STR(result, str);
+			if (C->long_data) {
+				zend_string_release(C->long_data);
+			}
+			C->long_data = str;
+			C->long_data_loaded = 1;
+			ZVAL_STR(result, zend_string_copy(str));
 			if (C->is_unicode) {
 				goto unicode_conv;
 			}
