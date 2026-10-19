@@ -32,6 +32,7 @@
 #include "SAPI.h"
 
 #include <stdio.h>
+#include <errno.h>
 #include "php.h"
 
 #ifdef HAVE_SYS_TIME_H
@@ -964,6 +965,40 @@ static int is_valid_path(const char *path)
   Comments in the code below refer to using the above URL in a request
 
  */
+static int parse_content_length(const char *content_length, size_t content_length_len, zend_long *parsed_length)
+{
+	zend_ulong value = 0;
+	size_t i;
+
+	if (!content_length) {
+		*parsed_length = 0;
+		return 1;
+	}
+	if (content_length_len == 0) {
+		*parsed_length = 0;
+		return 0;
+	}
+
+	for (i = 0; i < content_length_len; i++) {
+		unsigned int digit;
+
+		if (content_length[i] < '0' || content_length[i] > '9') {
+			*parsed_length = 0;
+			return 0;
+		}
+		digit = content_length[i] - '0';
+		if (value > (ZEND_LONG_MAX - digit) / 10) {
+			*parsed_length = 0;
+			return 0;
+		}
+		value = value * 10 + digit;
+	}
+
+	*parsed_length = (zend_long)value;
+	return 1;
+}
+
+
 static void init_request_info(void)
 {
 	fcgi_request *request = (fcgi_request*) SG(server_context);
@@ -990,14 +1025,23 @@ static void init_request_info(void)
 	SG(request_info).content_length = 0;
 	SG(sapi_headers).http_response_code = 200;
 
-	/* if script_path_translated is not set, then there is no point to carry on
-	 * as the response is 404 and there is no further processing. */
+	char *content_length;
+	size_t content_length_len = 0;
+	zend_long parsed_content_length;
+	int content_length_valid;
+	content_length = fcgi_getenv_length(request, "CONTENT_LENGTH", sizeof("CONTENT_LENGTH") - 1, &content_length_len);
+	content_length_valid = parse_content_length(content_length, content_length_len, &parsed_content_length);
+	SG(request_info).content_length = parsed_content_length;
+	if (!content_length_valid) {
+		fcgi_request_set_keep(request, 0);
+	}
+
 	if (script_path_translated) {
 		const char *auth;
-		char *content_length = FCGI_GETENV(request, "CONTENT_LENGTH");
 		char *content_type = FCGI_GETENV(request, "CONTENT_TYPE");
 		char *env_path_info = FCGI_GETENV(request, "PATH_INFO");
 		char *env_script_name = FCGI_GETENV(request, "SCRIPT_NAME");
+
 
 		/* Hack for buggy IIS that sets incorrect PATH_INFO */
 		char *env_server_software = FCGI_GETENV(request, "SERVER_SOFTWARE");
@@ -1346,7 +1390,6 @@ static void init_request_info(void)
 		/* FIXME - Work out proto_num here */
 		SG(request_info).query_string = FCGI_GETENV(request, "QUERY_STRING");
 		SG(request_info).content_type = (content_type ? content_type : "" );
-		SG(request_info).content_length = (content_length ? atol(content_length) : 0);
 
 		/* The CGI RFC allows servers to pass on unvalidated Authorization data */
 		auth = FCGI_GETENV(request, "HTTP_AUTHORIZATION");
