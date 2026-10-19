@@ -414,6 +414,7 @@ static bool dce_instr(context *ctx, zend_op *opline, zend_ssa_op *ssa_op) {
 	zend_ssa *ssa = ctx->ssa;
 	int free_var = -1;
 	uint8_t free_var_type;
+	uint8_t opcode = opline->opcode;
 
 	if (opline->opcode == ZEND_NOP) {
 		return 0;
@@ -451,6 +452,9 @@ static bool dce_instr(context *ctx, zend_op *opline, zend_ssa_op *ssa_op) {
 	zend_ssa_remove_instr(ctx->ssa, opline, ssa_op);
 
 	if (free_var >= 0) {
+		if (opcode != ZEND_FREE) {
+			opline->extended_value = 0;
+		}
 		opline->opcode = ZEND_FREE;
 		opline->op1.var = EX_NUM_TO_VAR(ssa->vars[free_var].var);
 		opline->op1_type = free_var_type;
