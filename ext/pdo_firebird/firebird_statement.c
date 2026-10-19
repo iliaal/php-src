@@ -27,6 +27,7 @@
 #include "php_pdo_firebird_int.h"
 #include "pdo_firebird_utils.h"
 
+#include <stdint.h>
 #include <time.h>
 
 #define READ_AND_RETURN_USING_MEMCPY(type, sqldata) do { \
@@ -194,7 +195,7 @@ static int pdo_firebird_stmt_execute(pdo_stmt_t *stmt) /* {{{ */
 	pdo_firebird_db_handle *H = S->H;
 	zend_ulong affected_rows = 0;
 	static char info_count[] = {isc_info_sql_records};
-	char result[64];
+	char result[64] = {0};
 
 	do {
 		/* named or open cursors should be closed first */
@@ -239,17 +240,23 @@ static int pdo_firebird_stmt_execute(pdo_stmt_t *stmt) /* {{{ */
 					break;
 				}
 				if (result[0] == isc_info_sql_records) {
-					unsigned i = 3, result_size = isc_vax_integer(&result[1], 2);
-					if (result_size > sizeof(result)) {
+					size_t i, result_size = isc_vax_integer(&result[1], 2);
+					if (result_size > sizeof(result) - 3) {
 						goto error;
 					}
-					while (i < result_size && result[i] != isc_info_end) {
-						short len = (short) isc_vax_integer(&result[i + 1], 2);
-						if (len != 1 && len != 2 && len != 4) {
+					for (i = 0; i < result_size && result[i + 3] != isc_info_end;) {
+						unsigned short len;
+						if (result[i + 3] == isc_info_truncated || result[i + 3] == isc_info_error
+								|| result_size - i < 3) {
 							goto error;
 						}
-						if (result[i] != isc_info_req_select_count) {
-							affected_rows += isc_vax_integer(&result[i + 3], len);
+						len = isc_vax_integer(&result[i + 4], 2);
+						if ((len != 1 && len != 2 && len != 4)
+								|| len > result_size - i - 3) {
+							goto error;
+						}
+						if (result[i + 3] != isc_info_req_select_count) {
+							affected_rows += isc_vax_integer(&result[i + 6], len);
 						}
 						i += len + 3;
 					}
@@ -377,10 +384,9 @@ static int php_firebird_fetch_blob(pdo_stmt_t *stmt, int colno, zval *result, IS
 	pdo_firebird_db_handle *H = S->H;
 	isc_blob_handle blobh = PDO_FIREBIRD_HANDLE_INITIALIZER;
 	char const bl_item = isc_info_blob_total_length;
-	char bl_info[20];
-	unsigned short i;
+	char bl_info[20] = {0};
 	int retval = 0;
-	size_t len = 0;
+	size_t i = 0, len = 0;
 
 	if (isc_open_blob(H->isc_status, &H->db, &H->tr, &blobh, blob_id)) {
 		php_firebird_error_stmt(stmt);
@@ -394,25 +400,52 @@ static int php_firebird_fetch_blob(pdo_stmt_t *stmt, int colno, zval *result, IS
 	}
 
 	/* find total length of blob's data */
-	for (i = 0; i < sizeof(bl_info); ) {
+	for (; i < sizeof(bl_info);) {
 		unsigned short item_len;
 		char item = bl_info[i++];
 
 		if (item == isc_info_end || item == isc_info_truncated || item == isc_info_error
-				|| i >= sizeof(bl_info)) {
-			const char *msg = "Couldn't determine BLOB size";
-			php_firebird_error_stmt_with_info(stmt, "HY000", strlen("HY000"), msg, strlen(msg));
-			goto fetch_blob_end;
+				|| sizeof(bl_info) - i < 2) {
+			goto blob_info_error;
 		}
 
-		item_len = (unsigned short) isc_vax_integer(&bl_info[i], 2);
-
+		item_len = isc_vax_integer(&bl_info[i], 2);
+		if (item_len > sizeof(bl_info) - i - 2) {
+			goto blob_info_error;
+		}
 		if (item == isc_info_blob_total_length) {
-			len = isc_vax_integer(&bl_info[i+2], item_len);
-			break;
+			if (item_len == 8) {
+				uint64_t blob_len = 0;
+				unsigned int byte_index;
+
+				for (byte_index = 0; byte_index < 8; byte_index++) {
+					blob_len |= (uint64_t)(unsigned char) bl_info[i + 2 + byte_index] << (8 * byte_index);
+				}
+				if (blob_len > ZSTR_MAX_LEN) {
+					goto blob_info_error;
+				}
+				len = blob_len;
+			} else if (item_len == 1 || item_len == 2 || item_len == 4) {
+				len = isc_vax_integer(&bl_info[i + 2], item_len);
+			} else {
+				goto blob_info_error;
+			}
+			goto blob_info_found;
 		}
-		i += item_len+2;
+		i += item_len + 2;
 	}
+	if (i == sizeof(bl_info)) {
+		goto blob_info_error;
+	}
+
+blob_info_error:
+	{
+		const char *msg = "Couldn't determine BLOB size";
+		php_firebird_error_stmt_with_info(stmt, "HY000", strlen("HY000"), msg, strlen(msg));
+		goto fetch_blob_end;
+	}
+
+blob_info_found:
 
 	/* we've found the blob's length, now fetch! */
 
