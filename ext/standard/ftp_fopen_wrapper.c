@@ -220,7 +220,12 @@ static php_stream *php_ftp_fopen_connect(php_stream_wrapper *wrapper, const char
 
 		/* get the response */
 		result = GET_FTP_RESULT(stream);
-		use_ssl_on_data = (result >= 200 && result<=299) || reuseid;
+		if ((result < 200 || result > 299) && !reuseid) {
+			php_stream_wrapper_log_warn(wrapper, context, options, SslNotSupported,
+				"Server doesn't support private data protection.");
+			goto connect_errexit;
+		}
+		use_ssl_on_data = (result >= 200 && result <= 299) || reuseid;
 #else
 		php_stream_write_string(stream, "PROT C\r\n");
 
