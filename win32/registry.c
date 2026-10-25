@@ -117,7 +117,9 @@ static int LoadDirectory(HashTable *directories, HKEY key, char *path, int path_
 					zval *tmpdata;
 
 					ZEND_HASH_MAP_FOREACH_KEY_VAL(parent_ht, num, index, tmpdata) {
-						zend_hash_add(ht, index, tmpdata);
+						if (zend_hash_add(ht, index, tmpdata)) {
+							Z_TRY_ADDREF_P(tmpdata);
+						}
 					} ZEND_HASH_FOREACH_END();
 				}
 				zend_hash_str_update_mem(directories, path, path_len, ht, sizeof(HashTable));
