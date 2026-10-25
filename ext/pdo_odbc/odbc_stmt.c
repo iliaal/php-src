@@ -137,6 +137,20 @@ static void free_cols(pdo_stmt_t *stmt, pdo_odbc_stmt *S)
 	}
 }
 
+static bool odbc_stmt_get_column_count(pdo_stmt_t *stmt, SQLSMALLINT *colcount)
+{
+	pdo_odbc_stmt *S = (pdo_odbc_stmt*)stmt->driver_data;
+	RETCODE rc = SQLNumResultCols(S->stmt, colcount);
+
+	if (rc != SQL_SUCCESS && rc != SQL_SUCCESS_WITH_INFO) {
+		pdo_odbc_stmt_error("SQLNumResultCols");
+		SQLCloseCursor(S->stmt);
+		return false;
+	}
+
+	return true;
+}
+
 static void odbc_free_out_buffer(zval *el)
 {
 	efree(Z_PTR_P(el));
@@ -330,11 +344,12 @@ static int odbc_stmt_execute(pdo_stmt_t *stmt)
 	stmt->row_count = row_count;
 
 	if (S->cols == NULL) {
-		/* do first-time-only definition of bind/mapping stuff */
 		SQLSMALLINT colcount;
 
 		/* how many columns do we have ? */
-		SQLNumResultCols(S->stmt, &colcount);
+		if (!odbc_stmt_get_column_count(stmt, &colcount)) {
+			return 0;
+		}
 
 		stmt->column_count = S->col_count = (int)colcount;
 		S->cols = ecalloc(colcount, sizeof(pdo_odbc_column));
@@ -924,8 +939,10 @@ static int odbc_stmt_next_rowset(pdo_stmt_t *stmt)
 	}
 
 	free_cols(stmt, S);
-	/* how many columns do we have ? */
-	SQLNumResultCols(S->stmt, &colcount);
+	if (!odbc_stmt_get_column_count(stmt, &colcount)) {
+		return 0;
+	}
+
 	stmt->column_count = S->col_count = (int)colcount;
 	S->cols = ecalloc(colcount, sizeof(pdo_odbc_column));
 	S->going_long = 0;
