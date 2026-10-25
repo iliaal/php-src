@@ -348,6 +348,10 @@ static int php_read(php_socket *sock, void *buf, size_t maxlen, int flags)
 			return -1;
 		}
 
+		if (m < 0 && errno == EAGAIN) {
+			m = 0;
+		}
+
 		set_errno(0);
 	}
 
