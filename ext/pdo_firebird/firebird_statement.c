@@ -342,6 +342,9 @@ static int pdo_firebird_stmt_describe(pdo_stmt_t *stmt, int colno) /* {{{ */
 static int pdo_firebird_stmt_get_column_meta(pdo_stmt_t *stmt, zend_long colno, zval *return_value)
 {
 	pdo_firebird_stmt *S = (pdo_firebird_stmt *) stmt->driver_data;
+	if (colno < 0 || colno >= S->out_sqlda.sqld) {
+		return FAILURE;
+	}
 	XSQLVAR *var = &S->out_sqlda.sqlvar[colno];
 
 	enum pdo_param_type param_type;
