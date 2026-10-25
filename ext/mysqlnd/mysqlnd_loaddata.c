@@ -228,20 +228,19 @@ mysqlnd_handle_local_infile(MYSQLND_CONN_DATA * conn, const char * const filenam
 		}
 	}
 
-	/* send empty packet for eof */
-	if ((ret = net->data->m.send(net, vio, empty_packet, 0, conn->stats, conn->error_info)) == 0) {
-		SET_CLIENT_ERROR(conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
-		goto infile_error;
-	}
-
 	/* error during read occurred */
 	if (bufsize < 0) {
 		char tmp_buf[sizeof(conn->error_info->error)];
 		int tmp_error_no;
-		*is_warning = TRUE;
-		DBG_ERR_FMT("Bufsize < 0, warning,  %d %s %s", CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
+		DBG_ERR_FMT("Bufsize < 0, %d %s %s", CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
 		tmp_error_no = infile.local_infile_error(info, tmp_buf, sizeof(tmp_buf));
 		SET_CLIENT_ERROR(conn->error_info, tmp_error_no, UNKNOWN_SQLSTATE, tmp_buf);
+		vio->data->m.close_stream(vio, conn->stats, conn->error_info);
+		goto infile_end;
+	}
+
+	if ((ret = net->data->m.send(net, vio, empty_packet, 0, conn->stats, conn->error_info)) == 0) {
+		SET_CLIENT_ERROR(conn->error_info, CR_SERVER_LOST, UNKNOWN_SQLSTATE, lost_conn);
 		goto infile_error;
 	}
 
@@ -258,6 +257,7 @@ infile_error:
 		result = FAIL;
 	}
 
+infile_end:
 	(*conn->infile.local_infile_end)(info);
 	if (buf) {
 		mnd_efree(buf);
