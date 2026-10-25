@@ -219,6 +219,7 @@ MYSQLND_METHOD(mysqlnd_pfc, read_compressed_packet_from_stream_and_fill_read_buf
 	size_t decompressed_size;
 	enum_func_status retval = PASS;
 	zend_uchar * compressed_data = NULL;
+	MYSQLND_READ_BUFFER * uncompressed_data = NULL;
 	zend_uchar comp_header[COMPRESSED_HEADER_SIZE];
 	DBG_ENTER("mysqlnd_pfc::read_compressed_packet_from_stream_and_fill_read_buffer");
 
@@ -237,22 +238,27 @@ MYSQLND_METHOD(mysqlnd_pfc, read_compressed_packet_from_stream_and_fill_read_buf
 			retval = FAIL;
 			goto end;
 		}
-		pfc->data->uncompressed_data = mysqlnd_create_read_buffer(decompressed_size);
-		retval = pfc->data->m.decode(pfc->data->uncompressed_data->data, decompressed_size, compressed_data, net_payload_size);
+		uncompressed_data = mysqlnd_create_read_buffer(decompressed_size);
+		retval = pfc->data->m.decode(uncompressed_data->data, decompressed_size, compressed_data, net_payload_size);
 		if (FAIL == retval) {
 			goto end;
 		}
 	} else {
 		DBG_INF_FMT("The server decided not to compress the data. Our job is easy. Copying %zu bytes", net_payload_size);
-		pfc->data->uncompressed_data = mysqlnd_create_read_buffer(net_payload_size);
-		if (FAIL == vio->data->m.network_read(vio, pfc->data->uncompressed_data->data, net_payload_size, conn_stats, error_info)) {
+		uncompressed_data = mysqlnd_create_read_buffer(net_payload_size);
+		if (FAIL == vio->data->m.network_read(vio, uncompressed_data->data, net_payload_size, conn_stats, error_info)) {
 			retval = FAIL;
 			goto end;
 		}
 	}
+	pfc->data->uncompressed_data = uncompressed_data;
+	uncompressed_data = NULL;
 end:
 	if (compressed_data) {
 		mnd_efree(compressed_data);
+	}
+	if (uncompressed_data) {
+		uncompressed_data->free_buffer(&uncompressed_data);
 	}
 	DBG_RETURN(retval);
 }
@@ -275,7 +281,7 @@ MYSQLND_METHOD(mysqlnd_pfc, decode)(zend_uchar * uncompressed_data, const size_t
 	if (error != Z_OK) {
 		DBG_INF_FMT("decompression NOT successful. error=%d Z_OK=%d Z_BUF_ERROR=%d Z_MEM_ERROR=%d", error, Z_OK, Z_BUF_ERROR, Z_MEM_ERROR);
 	}
-	DBG_RETURN(error == Z_OK? PASS:FAIL);
+	DBG_RETURN(error == Z_OK && tmp_complen == uncompressed_data_len ? PASS:FAIL);
 #else
 	DBG_ENTER("mysqlnd_pfc::decode");
 	DBG_RETURN(FAIL);
@@ -356,7 +362,9 @@ MYSQLND_METHOD(mysqlnd_pfc, receive)(MYSQLND_PFC * const pfc, MYSQLND_VIO * cons
 			}
 			pfc->data->compressed_envelope_packet_no++;
 			/* Now let's read from the wire, decompress it and fill the read buffer */
-			pfc->data->m.read_compressed_packet_from_stream_and_fill_read_buffer(pfc, vio, net_payload_size, conn_stats, error_info);
+			if (FAIL == pfc->data->m.read_compressed_packet_from_stream_and_fill_read_buffer(pfc, vio, net_payload_size, conn_stats, error_info)) {
+				DBG_RETURN(FAIL);
+			}
 
 			/*
 			  Now a bit of recursion - read from the read buffer,
