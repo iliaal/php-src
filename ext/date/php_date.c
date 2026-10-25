@@ -1171,14 +1171,15 @@ PHPAPI void php_mktime(INTERNAL_FUNCTION_PARAMETERS, bool gmt)
 	ZEND_PARSE_PARAMETERS_END();
 
 	/* Initialize structure with current time */
-	now = timelib_time_ctor();
 	if (gmt) {
+		now = timelib_time_ctor();
 		timelib_unixtime2gmt(now, (timelib_sll) php_time());
 	} else {
 		tzi = get_timezone_info();
 		if (!tzi) {
 			return;
 		}
+		now = timelib_time_ctor();
 		now->tz_info = tzi;
 		now->zone_type = TIMELIB_ZONETYPE_ID;
 		timelib_unixtime2local(now, (timelib_sll) php_time());
@@ -1303,6 +1304,7 @@ PHPAPI void php_strftime(INTERNAL_FUNCTION_PARAMETERS, bool gmt)
 		if (!tzi) {
 			return;
 		}
+		ts = timelib_time_ctor();
 		ts->tz_info = tzi;
 		ts->zone_type = TIMELIB_ZONETYPE_ID;
 		timelib_unixtime2local(ts, (timelib_sll) timestamp);
