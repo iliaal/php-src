@@ -34,10 +34,14 @@
 
 DBA_OPEN_FUNC(flatfile)
 {
+	flatfile *dba;
+
 	info->dbf = pemalloc(sizeof(flatfile), info->flags&DBA_PERSISTENT);
 	memset(info->dbf, 0, sizeof(flatfile));
+	dba = info->dbf;
 
-	((flatfile*)info->dbf)->fp = info->fp;
+	dba->fp = info->fp;
+	dba->persistent = info->flags & DBA_PERSISTENT;
 
 	return SUCCESS;
 }
@@ -47,7 +51,7 @@ DBA_CLOSE_FUNC(flatfile)
 	flatfile *dba = info->dbf;
 
 	if (dba->nextkey.dptr) {
-		efree(dba->nextkey.dptr);
+		pefree(dba->nextkey.dptr, dba->persistent);
 	}
 	pefree(dba, info->flags&DBA_PERSISTENT);
 }
@@ -128,7 +132,7 @@ DBA_FIRSTKEY_FUNC(flatfile)
 	flatfile *dba = info->dbf;
 
 	if (dba->nextkey.dptr) {
-		efree(dba->nextkey.dptr);
+		pefree(dba->nextkey.dptr, dba->persistent);
 	}
 	dba->nextkey = flatfile_firstkey(dba);
 	if (dba->nextkey.dptr) {
@@ -145,9 +149,7 @@ DBA_NEXTKEY_FUNC(flatfile)
 		return NULL;
 	}
 
-	if (dba->nextkey.dptr) {
-		efree(dba->nextkey.dptr);
-	}
+	pefree(dba->nextkey.dptr, dba->persistent);
 	dba->nextkey = flatfile_nextkey(dba);
 	if (dba->nextkey.dptr) {
 		return zend_string_init(dba->nextkey.dptr, dba->nextkey.dsize, /* persistent */ false);
