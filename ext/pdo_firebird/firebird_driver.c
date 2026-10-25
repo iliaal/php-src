@@ -735,7 +735,7 @@ static zend_long firebird_handle_doer(pdo_dbh_t *dbh, const zend_string *sql) /*
 	pdo_firebird_db_handle *H = (pdo_firebird_db_handle *)dbh->driver_data;
 	isc_stmt_handle stmt = PDO_FIREBIRD_HANDLE_INITIALIZER;
 	static char const info_count[] = { isc_info_sql_records };
-	char result[64];
+	char result[64] = {0};
 	int ret = 0;
 	XSQLDA in_sqlda, out_sqlda;
 
@@ -765,23 +765,29 @@ static zend_long firebird_handle_doer(pdo_dbh_t *dbh, const zend_string *sql) /*
 	}
 
 	if (result[0] == isc_info_sql_records) {
-		unsigned i = 3, result_size = isc_vax_integer(&result[1],2);
+		size_t i, result_size = isc_vax_integer(&result[1], 2);
 
-		if (result_size > sizeof(result)) {
+		if (result_size > sizeof(result) - 3) {
 			ret = -1;
 			goto free_statement;
 		}
-		while (i < result_size && result[i] != isc_info_end) {
-			short len = (short)isc_vax_integer(&result[i+1],2);
-			/* bail out on bad len */
-			if (len != 1 && len != 2 && len != 4) {
+		for (i = 0; i < result_size && result[i + 3] != isc_info_end;) {
+			unsigned short len;
+			if (result[i + 3] == isc_info_truncated || result[i + 3] == isc_info_error
+					|| result_size - i < 3) {
 				ret = -1;
 				goto free_statement;
 			}
-			if (result[i] != isc_info_req_select_count) {
-				ret += isc_vax_integer(&result[i+3],len);
+			len = isc_vax_integer(&result[i + 4], 2);
+			if ((len != 1 && len != 2 && len != 4)
+					|| len > result_size - i - 3) {
+				ret = -1;
+				goto free_statement;
 			}
-			i += len+3;
+			if (result[i + 3] != isc_info_req_select_count) {
+				ret += isc_vax_integer(&result[i + 6], len);
+			}
+			i += len + 3;
 		}
 	}
 
