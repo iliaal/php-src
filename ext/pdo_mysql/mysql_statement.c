@@ -272,6 +272,10 @@ static int pdo_mysql_stmt_execute_prepared_libmysql(pdo_stmt_t *stmt) /* {{{ */
 	if (mysql_stmt_bind_param(S->stmt, S->params) || mysql_stmt_execute(S->stmt)) {
 		if (S->params) {
 			memset(S->params, 0, S->num_params * sizeof(MYSQL_BIND));
+			for (int i = 0; i < S->num_params; i++) {
+				S->params[i].is_null = &S->in_null[i];
+				S->params[i].length = &S->in_length[i];
+			}
 		}
 		pdo_mysql_error_stmt(stmt);
 		if (mysql_stmt_errno(S->stmt) == 2057) {
