@@ -107,6 +107,7 @@ void fcgi_set_logger(fcgi_logger lg);
 
 int   fcgi_has_env(fcgi_request *req);
 char* fcgi_getenv(fcgi_request *req, const char* var, int var_len);
+char* fcgi_getenv_length(fcgi_request *req, const char* var, int var_len, size_t *val_len);
 char* fcgi_putenv(fcgi_request *req, char* var, int var_len, char* val);
 char* fcgi_quick_getenv(fcgi_request *req, const char* var, int var_len, unsigned int hash_value);
 char* fcgi_quick_putenv(fcgi_request *req, char* var, int var_len, unsigned int hash_value, char* val);

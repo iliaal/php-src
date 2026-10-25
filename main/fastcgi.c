@@ -1679,6 +1679,20 @@ char* fcgi_getenv(fcgi_request *req, const char* var, int var_len)
 	return fcgi_hash_get(&req->env, FCGI_HASH_FUNC(var, var_len), (char*)var, var_len, &val_len);
 }
 
+char* fcgi_getenv_length(fcgi_request *req, const char* var, int var_len, size_t *val_len)
+{
+	unsigned int value_len;
+	char *value;
+
+	if (!req) return NULL;
+
+	value = fcgi_hash_get(&req->env, FCGI_HASH_FUNC(var, var_len), (char*)var, var_len, &value_len);
+	if (val_len) {
+		*val_len = value ? value_len : 0;
+	}
+	return value;
+}
+
 char* fcgi_quick_getenv(fcgi_request *req, const char* var, int var_len, unsigned int hash_value)
 {
 	unsigned int val_len;

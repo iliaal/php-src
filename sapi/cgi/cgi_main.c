@@ -28,6 +28,7 @@
 #include "SAPI.h"
 
 #include <stdio.h>
+#include <errno.h>
 
 #ifdef PHP_WIN32
 # include "win32/time.h"
@@ -1158,6 +1159,40 @@ static int is_valid_path(const char *path)
   Comments in the code below refer to using the above URL in a request
 
  */
+static int parse_content_length(const char *content_length, size_t content_length_len, zend_long *parsed_length)
+{
+	zend_ulong value = 0;
+	size_t i;
+
+	if (!content_length) {
+		*parsed_length = 0;
+		return 1;
+	}
+	if (content_length_len == 0) {
+		*parsed_length = 0;
+		return 0;
+	}
+
+	for (i = 0; i < content_length_len; i++) {
+		unsigned int digit;
+
+		if (content_length[i] < '0' || content_length[i] > '9') {
+			*parsed_length = 0;
+			return 0;
+		}
+		digit = content_length[i] - '0';
+		if (value > (ZEND_LONG_MAX - digit) / 10) {
+			*parsed_length = 0;
+			return 0;
+		}
+		value = value * 10 + digit;
+	}
+
+	*parsed_length = (zend_long)value;
+	return 1;
+}
+
+
 static void init_request_info(fcgi_request *request)
 {
 	int has_env = fcgi_has_env(request);
@@ -1186,9 +1221,24 @@ static void init_request_info(fcgi_request *request)
 	 * we are running in a cgi environment, since it is always
 	 * null otherwise.  otherwise, the filename
 	 * of the script will be retrieved later via argc/argv */
+	char *content_length;
+	size_t content_length_len = 0;
+	zend_long parsed_content_length;
+	int content_length_valid;
+	if (fcgi_is_fastcgi()) {
+		content_length = fcgi_getenv_length(request, "CONTENT_LENGTH", sizeof("CONTENT_LENGTH") - 1, &content_length_len);
+	} else {
+		content_length = CGI_GETENV("CONTENT_LENGTH");
+		content_length_len = content_length ? strlen(content_length) : 0;
+	}
+	content_length_valid = parse_content_length(content_length, content_length_len, &parsed_content_length);
+	SG(request_info).content_length = parsed_content_length;
+	if (!content_length_valid && fcgi_is_fastcgi()) {
+		fcgi_request_set_keep(request, 0);
+	}
+
 	if (script_path_translated) {
 		const char *auth;
-		char *content_length = CGI_GETENV("CONTENT_LENGTH");
 		char *content_type = CGI_GETENV("CONTENT_TYPE");
 		char *env_path_info = CGI_GETENV("PATH_INFO");
 		char *env_script_name = CGI_GETENV("SCRIPT_NAME");
@@ -1444,7 +1494,6 @@ static void init_request_info(fcgi_request *request)
 		/* FIXME - Work out proto_num here */
 		SG(request_info).query_string = CGI_GETENV("QUERY_STRING");
 		SG(request_info).content_type = (content_type ? content_type : "" );
-		SG(request_info).content_length = (content_length ? atol(content_length) : 0);
 
 		/* The CGI RFC allows servers to pass on unvalidated Authorization data */
 		auth = CGI_GETENV("HTTP_AUTHORIZATION");
