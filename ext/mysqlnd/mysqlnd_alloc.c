@@ -154,7 +154,7 @@ static void * _mysqlnd_erealloc(void *ptr, size_t new_size MYSQLND_MEM_D)
 {
 	void *ret;
 	bool collect_memory_statistics = MYSQLND_G(collect_memory_statistics);
-	size_t old_size = collect_memory_statistics && ptr? *(size_t *) (((char*)ptr) - sizeof(size_t)) : 0;
+	size_t old_size = collect_memory_statistics && ptr? *(size_t *) (((char*)ptr) - EXTRA_SIZE) : 0;
 	TRACE_ALLOC_ENTER(mysqlnd_erealloc_name);
 	TRACE_ALLOC_INF_FMT("ptr=%p old_size=%zu, new_size=%zu", ptr, old_size, new_size);
 	ret = erealloc_rel(REAL_PTR(ptr), REAL_SIZE(new_size));
@@ -174,7 +174,7 @@ static void * _mysqlnd_perealloc(void *ptr, size_t new_size, bool persistent MYS
 {
 	void *ret;
 	bool collect_memory_statistics = MYSQLND_G(collect_memory_statistics);
-	size_t old_size = collect_memory_statistics && ptr? *(size_t *) (((char*)ptr) - sizeof(size_t)) : 0;
+	size_t old_size = collect_memory_statistics && ptr? *(size_t *) (((char*)ptr) - EXTRA_SIZE) : 0;
 	TRACE_ALLOC_ENTER(mysqlnd_perealloc_name);
 	TRACE_ALLOC_INF_FMT("ptr=%p old_size=%zu new_size=%zu   persistent=%u", ptr, old_size, new_size, persistent);
 	ret = perealloc_rel(REAL_PTR(ptr), REAL_SIZE(new_size), persistent);
@@ -209,8 +209,8 @@ static void _mysqlnd_efree(void *ptr MYSQLND_MEM_D)
 
 	if (ptr) {
 		if (collect_memory_statistics) {
-			free_amount = *(size_t *)(((char*)ptr) - sizeof(size_t));
-			TRACE_ALLOC_INF_FMT("ptr=%p size=%zu", ((char*)ptr) - sizeof(size_t), free_amount);
+			free_amount = *(size_t *)(((char*)ptr) - EXTRA_SIZE);
+			TRACE_ALLOC_INF_FMT("ptr=%p size=%zu", ((char*)ptr) - EXTRA_SIZE, free_amount);
 		}
 		efree_rel(REAL_PTR(ptr));
 	}
@@ -240,8 +240,8 @@ static void _mysqlnd_pefree(void *ptr, bool persistent MYSQLND_MEM_D)
 
 	if (ptr) {
 		if (collect_memory_statistics) {
-			free_amount = *(size_t *)(((char*)ptr) - sizeof(size_t));
-			TRACE_ALLOC_INF_FMT("ptr=%p size=%zu", ((char*)ptr) - sizeof(size_t), free_amount);
+			free_amount = *(size_t *)(((char*)ptr) - EXTRA_SIZE);
+			TRACE_ALLOC_INF_FMT("ptr=%p size=%zu", ((char*)ptr) - EXTRA_SIZE, free_amount);
 		}
 		pefree_rel(REAL_PTR(ptr), persistent);
 	}
