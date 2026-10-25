@@ -712,7 +712,7 @@ static inline void fixEndian( LSAPI_Request * pReq )
 static void fixHeaderIndexEndian( LSAPI_Request * pReq )
 {
     int i;
-    for( i = 0; i < H_TRANSFER_ENCODING; ++i )
+    for( i = 0; i <= H_TRANSFER_ENCODING; ++i )
     {
         if ( pReq->m_pHeaderIndex->m_headerOff[i] )
         {
@@ -745,13 +745,16 @@ static int validateHeaders( LSAPI_Request * pReq )
 {
     int totalLen = pReq->m_pHeader->m_httpHeaderLen;
     int i;
-    for(i = 0; i < H_TRANSFER_ENCODING; ++i)
+    if (totalLen < 0 || totalLen > LSAPI_MAX_HEADER_LEN)
+        return -1;
+    for(i = 0; i <= H_TRANSFER_ENCODING; ++i)
     {
         if ( pReq->m_pHeaderIndex->m_headerOff[i] )
         {
-            if (pReq->m_pHeaderIndex->m_headerOff[i] > totalLen
+            if (pReq->m_pHeaderIndex->m_headerOff[i] < 0
+                || pReq->m_pHeaderIndex->m_headerOff[i] > totalLen
                 || pReq->m_pHeaderIndex->m_headerLen[i]
-                    + pReq->m_pHeaderIndex->m_headerOff[i] > totalLen)
+                    > totalLen - pReq->m_pHeaderIndex->m_headerOff[i])
                 return -1;
         }
     }
@@ -762,10 +765,12 @@ static int validateHeaders( LSAPI_Request * pReq )
         pEnd = pCur + pReq->m_pHeader->m_cntUnknownHeaders;
         while( pCur < pEnd )
         {
-            if (pCur->nameOff > totalLen
-                || pCur->nameOff + pCur->nameLen > totalLen
+            if (pCur->nameOff < 0 || pCur->nameLen < 0
+                || pCur->nameOff > totalLen
+                || pCur->nameLen > totalLen - pCur->nameOff
+                || pCur->valueOff < 0 || pCur->valueLen < 0
                 || pCur->valueOff > totalLen
-                || pCur->valueOff + pCur->valueLen > totalLen)
+                || pCur->valueLen > totalLen - pCur->valueOff)
                 return -1;
             ++pCur;
         }
@@ -1256,13 +1261,6 @@ static int parseRequest( LSAPI_Request * pReq, int totalLen )
                     pReq->m_pHeader->m_cntUnknownHeaders;
 
     pReq->m_pHttpHeader = pBegin;
-    pBegin += pReq->m_pHeader->m_httpHeaderLen;
-    if ( pBegin != pEnd )
-    {
-        lsapi_log("Request header does match total size, total: %d, "
-                 "real: %ld\n", totalLen, pBegin - pReq->m_pReqBuf );
-        return -1;
-    }
     if ( shouldFixEndian )
     {
         fixHeaderIndexEndian( pReq );
@@ -1271,6 +1269,14 @@ static int parseRequest( LSAPI_Request * pReq, int totalLen )
     if (validateHeaders(pReq) == -1)
     {
         lsapi_log("Bad request header - ERROR#2\n");
+        return -1;
+    }
+
+    pBegin += pReq->m_pHeader->m_httpHeaderLen;
+    if ( pBegin != pEnd )
+    {
+        lsapi_log("Request header does match total size, total: %d, "
+                 "real: %ld\n", totalLen, pBegin - pReq->m_pReqBuf );
         return -1;
     }
 
