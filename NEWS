@@ -94,6 +94,8 @@ PHP                                                                        NEWS
     bails out). (matyapiro31, David Carlier)
 
 - FPM:
+  . Fixed lost worker output after worker replacement with the poll event
+    mechanism. (Ilia Alshanetsky)
   . Fixed bug GH-24229 (fcgi_close() passes shutdown() a literal 1, which is
     SHUT_RD in WASI). (Ryosuke Ishibashi)
   . Fixed crash and stack memory disclosure in the worker output logging with
