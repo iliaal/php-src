@@ -233,6 +233,8 @@ PHP                                                                        NEWS
     certificates with CRLs). (Alexander Danilov)
 
 - PDO:
+  . Marked connection DSNs as sensitive to hide embedded credentials in
+    exception traces. (Ilia Alshanetsky)
   . Fixed invalid ATTR_ORACLE_NULLS values being accepted and truncated.
     (Ilia Alshanetsky)
   . Fixed a duplicate warning when ATTR_STATEMENT_CLASS is rejected on a
