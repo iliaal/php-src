@@ -17564,9 +17564,18 @@ static bool zend_jit_may_be_in_reg(const zend_op_array *op_array, zend_ssa *ssa,
 
 		p = ssa->vars[var].phi_use_chain;
 		while (p) {
-			use_block = p->block;
-			if (use_block != def_block) {
-				bb = &ssa->cfg.blocks[use_block];
+			bb = &ssa->cfg.blocks[p->block];
+			if (bb->flags & (ZEND_BB_ENTRY|ZEND_BB_RECV_ENTRY)) {
+				ret = 0;
+				break;
+			}
+			if (p->block == def_block && p->pi >= 0) {
+				if (p->pi != def_block) {
+					zend_worklist_push(&worklist, p->pi);
+				}
+			} else if (p->block != def_block
+			 || ssa->vars[var].definition >= 0
+			 || ssa->vars[var].definition_phi->pi < 0) {
 				for (j = 0; j < bb->predecessors_count; j++) {
 					if (p->sources[j] == var) {
 						use_block = ssa->cfg.predecessors[bb->predecessor_offset + j];
@@ -17579,7 +17588,7 @@ static bool zend_jit_may_be_in_reg(const zend_op_array *op_array, zend_ssa *ssa,
 			p = zend_ssa_next_use_phi(ssa, var, p);
 		}
 
-		while (zend_worklist_len(&worklist) != 0) {
+		while (ret && zend_worklist_len(&worklist) != 0) {
 			b = zend_worklist_pop(&worklist);
 			bb = &ssa->cfg.blocks[b];
 			if (bb->flags & (ZEND_BB_ENTRY|ZEND_BB_RECV_ENTRY)) {
