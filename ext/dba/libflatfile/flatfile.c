@@ -49,6 +49,50 @@
 	) \
 )
 
+static zend_result flatfile_delete_empty_key(flatfile *dba, zend_off_t start, zend_off_t previous, char *buf)
+{
+	if (!php_stream_truncate_supported(dba->fp) || !php_stream_gets(dba->fp, buf, 15)) {
+		return FAILURE;
+	}
+	size_t value_length = atoi(buf);
+	zend_off_t value_pos = php_stream_tell(dba->fp);
+	if (value_pos < 0 || php_stream_seek(dba->fp, 0, SEEK_END) != 0) {
+		return FAILURE;
+	}
+	zend_off_t file_end = php_stream_tell(dba->fp);
+	size_t file_size = file_end;
+	if (file_end < value_pos || (zend_off_t) file_size != file_end
+			|| value_length > file_size - value_pos
+			|| php_stream_truncate_set_size(dba->fp, file_size) != 0) {
+		return FAILURE;
+	}
+	zend_off_t end = value_pos + value_length;
+	zend_off_t read_pos = end;
+	zend_off_t write_pos = start;
+	while (read_pos < file_end) {
+		size_t count = MIN(FLATFILE_BLOCK_SIZE, file_end - read_pos);
+		if (php_stream_seek(dba->fp, read_pos, SEEK_SET) != 0
+				|| php_stream_read(dba->fp, buf, count) != count
+				|| php_stream_seek(dba->fp, write_pos, SEEK_SET) != 0
+				|| php_stream_write(dba->fp, buf, count) != count) {
+			return FAILURE;
+		}
+		read_pos += count;
+		write_pos += count;
+	}
+	if (php_stream_flush(dba->fp) != 0
+			|| php_stream_truncate_set_size(dba->fp, write_pos) != 0
+			|| php_stream_seek(dba->fp, write_pos, SEEK_SET) != 0) {
+		return FAILURE;
+	}
+	if (dba->CurrentFlatFilePos >= (size_t) end) {
+		dba->CurrentFlatFilePos -= end - start;
+	} else if (dba->CurrentFlatFilePos > (size_t) start) {
+		dba->CurrentFlatFilePos = previous;
+	}
+	return SUCCESS;
+}
+
 /*
  * ret = -1 means that database was opened for read-only
  * ret = 0  success
@@ -73,7 +117,10 @@ int flatfile_store(flatfile *dba, datum key_datum, datum value_datum, int mode) 
 			return -1;
 		}
 	} else { /* FLATFILE_REPLACE */
-		flatfile_delete(dba, key_datum);
+		bool empty_key_exists = key_datum.dsize == 0 && flatfile_findkey(dba, key_datum);
+		if (flatfile_delete(dba, key_datum) == FAILURE && empty_key_exists) {
+			return -1;
+		}
 		php_stream_printf(dba->fp, "%zu\n", key_datum.dsize);
 		php_stream_flush(dba->fp);
 		if (php_stream_write(dba->fp, key_datum.dptr, key_datum.dsize) < key_datum.dsize) {
@@ -116,10 +163,15 @@ int flatfile_delete(flatfile *dba, datum key_datum) {
 	size_t buf_size = FLATFILE_BLOCK_SIZE;
 	char *buf = emalloc(buf_size);
 	size_t num;
-	size_t pos;
+	zend_off_t pos;
+	zend_off_t previous = 0;
 
 	php_stream_rewind(dba->fp);
 	while(!php_stream_eof(dba->fp)) {
+		zend_off_t start = php_stream_tell(dba->fp);
+		if (start < 0) {
+			break;
+		}
 		/* read in the length of the key name */
 		if (!php_stream_gets(dba->fp, buf, 15)) {
 			break;
@@ -128,11 +180,19 @@ int flatfile_delete(flatfile *dba, datum key_datum) {
 			break;
 		}
 		pos = php_stream_tell(dba->fp);
+		if (pos < 0) {
+			break;
+		}
 
 		/* read in the key name */
 		num = php_stream_read(dba->fp, buf, num);
 
 		if (size == num && !memcmp(buf, key, size)) {
+			if (size == 0) {
+				int result = flatfile_delete_empty_key(dba, start, previous, buf);
+				efree(buf);
+				return result;
+			}
 			php_stream_seek(dba->fp, pos, SEEK_SET);
 			php_stream_putc(dba->fp, 0);
 			php_stream_flush(dba->fp);
@@ -141,6 +201,10 @@ int flatfile_delete(flatfile *dba, datum key_datum) {
 			return SUCCESS;
 		}
 
+		previous = php_stream_tell(dba->fp);
+		if (previous < 0) {
+			break;
+		}
 		/* read in the length of the value */
 		if (!php_stream_gets(dba->fp, buf, 15)) {
 			break;
@@ -234,6 +298,9 @@ datum flatfile_firstkey(flatfile *dba) {
 
 /* {{{ flatfile_nextkey */
 datum flatfile_nextkey(flatfile *dba) {
+	if (dba->CurrentFlatFilePos == 0) {
+		return flatfile_firstkey(dba);
+	}
 	datum res;
 	size_t num;
 	size_t buf_size = FLATFILE_BLOCK_SIZE;

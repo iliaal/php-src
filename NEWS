@@ -106,6 +106,8 @@ PHP                                                                        NEWS
     in-process module restart). (Lazizbek Ergashev)
 
 - DBA:
+  . Fixed record corruption when deleting or replacing an empty key in the
+    flatfile handler. (Ilia Alshanetsky)
   . Fixed bug GH-24641 (ndbm backend never checks dbm_open() return value,
     NULL deref on first use after a failed open). (Girgias)
 
