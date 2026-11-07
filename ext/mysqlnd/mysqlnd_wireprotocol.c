@@ -1050,6 +1050,7 @@ php_mysqlnd_eof_read(MYSQLND_CONN_DATA * conn, void * _packet)
 premature_end:
 	DBG_ERR_FMT("EOF packet shorter than expected");
 	php_error_docref(NULL, E_WARNING, "EOF packet shorter than expected");
+	SET_CLIENT_ERROR(error_info, CR_MALFORMED_PACKET, UNKNOWN_SQLSTATE, "Malformed packet");
 	DBG_RETURN(FAIL);
 }
 /* }}} */

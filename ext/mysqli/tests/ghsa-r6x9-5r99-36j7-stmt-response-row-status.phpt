@@ -16,7 +16,11 @@ $process->wait();
 $conn = new mysqli( $servername, $username, $password, "", $process->getPort() );
 
 echo "[*] Preparing statement on the fake server...\n";
-$conn->prepare("SELECT item FROM items");
+try {
+    $conn->prepare("SELECT item FROM items");
+} catch (mysqli_sql_exception $e) {
+    echo $e::class, ": ", $e->getMessage(), PHP_EOL;
+}
 
 $conn->close();
 
@@ -37,4 +41,5 @@ print "done!";
 Warning: mysqli::prepare(): Premature end of data (mysqlnd_wireprotocol.c:%d) in %s on line %d
 
 Warning: mysqli::prepare(): EOF packet shorter than expected in %s on line %d
+mysqli_sql_exception: Malformed packet
 done!
