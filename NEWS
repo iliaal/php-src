@@ -48,6 +48,8 @@ PHP                                                                        NEWS
     when lexbor allocation fails). (ndossche)
   . Fixed bug GH-25434 (C14NFile() on a Dom\XMLDocument leaves the document
     changed and leaks memory). (lazerg)
+  . Fixed a crash and a use-after-free in key() of an attribute or DTD named
+    node map iterator that has no current item. (Ilia Alshanetsky)
 
 - Filter:
   . Fixed stack overflow in filter_var() and filter_var_array() with deeply
