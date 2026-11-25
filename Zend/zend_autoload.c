@@ -27,9 +27,15 @@ ZEND_TLS HashTable *zend_class_autoload_functions;
 
 static void zend_autoload_callback_zval_destroy(zval *element)
 {
-	zend_fcall_info_cache *fcc = Z_PTR_P(element);
-	zend_fcc_dtor(fcc);
-	efree(fcc);
+	zend_fcall_info_cache fcc = *(zend_fcall_info_cache *) Z_PTR_P(element);
+	efree(Z_PTR_P(element));
+	zend_fcc_dtor(&fcc);
+}
+
+static void zend_autoload_init_table(HashTable *ht)
+{
+	zend_hash_init(ht, 1, NULL, zend_autoload_callback_zval_destroy, false);
+	zend_hash_real_init_mixed(ht);
 }
 
 static Bucket *autoload_find_registered_function(const HashTable *autoloader_table, const zend_fcall_info_cache *function_entry)
@@ -89,9 +95,7 @@ ZEND_API void zend_autoload_register_class_loader(zend_fcall_info_cache *fcc, bo
 
 	if (!zend_class_autoload_functions) {
 		ALLOC_HASHTABLE(zend_class_autoload_functions);
-		zend_hash_init(zend_class_autoload_functions, 1, NULL, zend_autoload_callback_zval_destroy, false);
-		/* Initialize as non-packed hash table for prepend functionality. */
-		zend_hash_real_init_mixed(zend_class_autoload_functions);
+		zend_autoload_init_table(zend_class_autoload_functions);
 	}
 
 	ZEND_ASSERT(
@@ -149,17 +153,35 @@ ZEND_API void zend_autoload_fcc_map_to_callable_zval_map(zval *return_value) {
 /* Only for deprecated strange behaviour of spl_autoload_unregister() */
 ZEND_API void zend_autoload_clean_class_loaders(void)
 {
-	if (zend_class_autoload_functions) {
+	if (zend_class_autoload_functions && zend_hash_num_elements(zend_class_autoload_functions) > 0) {
 		/* Don't destroy the hash table, as we might be iterating over it right now. */
-		zend_hash_clean(zend_class_autoload_functions);
+		HashTable new_ht;
+		zend_autoload_init_table(&new_ht);
+		HashTable tmp = *zend_class_autoload_functions;
+		*zend_class_autoload_functions = new_ht;
+		zend_hash_destroy(&tmp);
 	}
 }
 
 void zend_autoload_shutdown(void)
 {
 	if (zend_class_autoload_functions) {
-		zend_hash_destroy(zend_class_autoload_functions);
-		FREE_HASHTABLE(zend_class_autoload_functions);
+		HashTable *ht = zend_class_autoload_functions;
 		zend_class_autoload_functions = NULL;
+		zend_try {
+			zend_hash_graceful_destroy(ht);
+		} zend_catch {
+			zend_objects_store_mark_destructed(&EG(objects_store));
+			zend_hash_destroy(ht);
+		} zend_end_try();
+		FREE_HASHTABLE(ht);
+
+		if (UNEXPECTED(zend_class_autoload_functions)) {
+			zend_objects_store_mark_destructed(&EG(objects_store));
+			ht = zend_class_autoload_functions;
+			zend_class_autoload_functions = NULL;
+			zend_hash_destroy(ht);
+			FREE_HASHTABLE(ht);
+		}
 	}
 }
