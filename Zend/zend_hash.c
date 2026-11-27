@@ -3490,24 +3490,26 @@ ZEND_ATTRIBUTE_NONNULL ZEND_API bool ZEND_FASTCALL _zend_handle_numeric_str_ex(c
 	     *tmp > '2')) { /* overflow */
 		return 0;
 	}
-	*idx = (*tmp - '0');
+	zend_ulong val = (zend_ulong) (*tmp - '0');
 	while (1) {
 		++tmp;
 		if (tmp == end) {
 			if (*key == '-') {
-				if (*idx-1 > ZEND_LONG_MAX) { /* overflow */
-					return 0;
+				if (val - 1 > ZEND_LONG_MAX) {
+					return false;
 				}
-				*idx = 0 - *idx;
-			} else if (*idx > ZEND_LONG_MAX) { /* overflow */
-				return 0;
+				*idx = 0 - val;
+			} else if (val > ZEND_LONG_MAX) {
+				return false;
+			} else {
+				*idx = val;
 			}
-			return 1;
+			return true;
 		}
 		if (*tmp <= '9' && *tmp >= '0') {
-			*idx = (*idx * 10) + (*tmp - '0');
+			val = (val * 10) + (zend_ulong) (*tmp - '0');
 		} else {
-			return 0;
+			return false;
 		}
 	}
 }
