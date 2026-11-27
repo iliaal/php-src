@@ -6407,6 +6407,7 @@ PHP_FUNCTION(str_split)
 		while (n_reg_segments-- > 0) {
 			/* Each segment costs a zend_string, so stop once over the limit. */
 			if (ZEND_HAS_OOM()) {
+				ZEND_HASH_FILL_FINISH();
 				RETURN_OOM();
 			}
 			ZEND_ASSERT(split_length > 0);
