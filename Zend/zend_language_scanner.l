@@ -759,23 +759,46 @@ ZEND_API void zend_prepare_string_for_scanning(zval *str, zend_string *filename)
 }
 
 
+static size_t zend_multibyte_script_offset(size_t filtered_offset)
+{
+	size_t low = 0, high = SCNG(script_org_size) + 1;
+
+	while (low < high) {
+		size_t mid = low + (high - low) / 2, length = 0;
+		unsigned char *p = NULL;
+
+		if ((size_t)-1 == SCNG(input_filter)(&p, &length, SCNG(script_org), mid)) {
+			return (size_t)-1;
+		}
+		if (length >= filtered_offset && (!filtered_offset || !memcmp(p, SCNG(yy_start), filtered_offset))) {
+			high = mid;
+		} else {
+			low = mid + 1;
+		}
+		efree(p);
+	}
+	return low > SCNG(script_org_size) ? (size_t)-1 : low;
+}
+
+static size_t zend_multibyte_filtered_length(size_t offset)
+{
+	size_t length = offset;
+
+	if (SCNG(input_filter)) {
+		unsigned char *p = NULL;
+		if ((size_t)-1 == SCNG(input_filter)(&p, &length, SCNG(script_org), offset)) {
+			return (size_t)-1;
+		}
+		efree(p);
+	}
+	return length;
+}
+
 ZEND_API size_t zend_get_scanned_file_offset(void)
 {
 	size_t offset = SCNG(yy_cursor) - SCNG(yy_start);
 	if (SCNG(input_filter)) {
-		size_t original_offset = offset, length = 0;
-		do {
-			unsigned char *p = NULL;
-			if ((size_t)-1 == SCNG(input_filter)(&p, &length, SCNG(script_org), offset)) {
-				return (size_t)-1;
-			}
-			efree(p);
-			if (length > original_offset) {
-				offset--;
-			} else if (length < original_offset) {
-				offset++;
-			}
-		} while (original_offset != length);
+		offset = zend_multibyte_script_offset(offset);
 	}
 	return offset;
 }
@@ -863,8 +886,26 @@ void highlight_string(zend_string *str, zend_syntax_highlighter_ini *syntax_high
 
 ZEND_API void zend_multibyte_yyinput_again(zend_encoding_filter old_input_filter, const zend_encoding *old_encoding)
 {
-	size_t length;
+	const zend_encoding *new_encoding = SCNG(script_encoding);
+	zend_encoding_filter new_input_filter = SCNG(input_filter);
+	size_t length, offset;
 	unsigned char *new_yy_start;
+
+	if (old_input_filter) {
+		SCNG(script_encoding) = old_encoding;
+		SCNG(input_filter) = old_input_filter;
+		offset = zend_multibyte_script_offset(SCNG(yy_cursor) - SCNG(yy_start));
+		SCNG(script_encoding) = new_encoding;
+		SCNG(input_filter) = new_input_filter;
+	} else {
+		offset = SCNG(yy_cursor) - SCNG(script_org);
+	}
+
+	if (offset <= SCNG(script_org_size)) {
+		offset = zend_multibyte_filtered_length(offset);
+	} else {
+		offset = (size_t)-1;
+	}
 
 	/* convert and set */
 	if (!SCNG(input_filter)) {
@@ -887,9 +928,14 @@ ZEND_API void zend_multibyte_yyinput_again(zend_encoding_filter old_input_filter
 		SCNG(script_filtered_size) = length;
 	}
 
-	SCNG(yy_cursor) = new_yy_start + (SCNG(yy_cursor) - SCNG(yy_start));
-	SCNG(yy_marker) = new_yy_start + (SCNG(yy_marker) - SCNG(yy_start));
-	SCNG(yy_text) = new_yy_start + (SCNG(yy_text) - SCNG(yy_start));
+	if (offset > length) {
+		zend_error_noreturn(E_COMPILE_ERROR, "Could not convert the script from the detected "
+				"encoding \"%s\" to a compatible encoding", zend_multibyte_get_encoding_name(LANG_SCNG(script_encoding)));
+	}
+
+	SCNG(yy_cursor) = new_yy_start + offset;
+	SCNG(yy_marker) = SCNG(yy_cursor);
+	SCNG(yy_text) = SCNG(yy_cursor);
 	SCNG(yy_limit) = new_yy_start + length;
 
 	SCNG(yy_start) = new_yy_start;
