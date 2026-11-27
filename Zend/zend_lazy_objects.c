@@ -239,8 +239,10 @@ ZEND_API zend_object *zend_object_make_lazy(zend_object *obj,
 	ZEND_ASSERT((flags & ZEND_LAZY_OBJECT_STRATEGY_MASK) == ZEND_LAZY_OBJECT_STRATEGY_GHOST
 			|| (flags & ZEND_LAZY_OBJECT_STRATEGY_MASK) == ZEND_LAZY_OBJECT_STRATEGY_PROXY);
 
+#if ZEND_DEBUG
 	ZEND_ASSERT(!obj || (!zend_object_is_lazy(obj) || zend_lazy_object_initialized(obj)));
 	ZEND_ASSERT(!obj || instanceof_function(obj->ce, reflection_ce));
+#endif
 
 	/* Internal classes are not supported */
 	if (UNEXPECTED(reflection_ce->type == ZEND_INTERNAL_CLASS && reflection_ce != zend_standard_class_def)) {

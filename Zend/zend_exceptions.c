@@ -115,8 +115,10 @@ void zend_exception_set_previous(zend_object *exception, zend_object *add_previo
 		return;
 	}
 
+#if ZEND_DEBUG
 	ZEND_ASSERT(instanceof_function(add_previous->ce, zend_ce_throwable)
 		&& "Previous exception must implement Throwable");
+#endif
 
 	ZVAL_OBJ(&pv, add_previous);
 	ZVAL_OBJ(&zv, exception);
@@ -895,8 +897,10 @@ static zend_object *zend_throw_exception_zstr(zend_class_entry *exception_ce, ze
 		exception_ce = zend_ce_exception;
 	}
 
+#if ZEND_DEBUG
 	ZEND_ASSERT(instanceof_function(exception_ce, zend_ce_throwable)
 		&& "Exceptions must implement Throwable");
+#endif
 
 	object_init_ex(&ex, exception_ce);
 

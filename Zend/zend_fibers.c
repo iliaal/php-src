@@ -483,6 +483,7 @@ ZEND_API void zend_fiber_switch_context(zend_fiber_transfer *transfer)
 	ZEND_ASSERT(to != from && "Cannot switch into the running fiber context");
 
 	/* Assert that all error transfers hold a Throwable value. */
+#if ZEND_DEBUG
 	ZEND_ASSERT((
 		!(transfer->flags & ZEND_FIBER_TRANSFER_FLAG_ERROR) ||
 		(Z_TYPE(transfer->value) == IS_OBJECT && (
@@ -491,6 +492,7 @@ ZEND_API void zend_fiber_switch_context(zend_fiber_transfer *transfer)
 			instanceof_function(Z_OBJCE(transfer->value), zend_ce_throwable)
 		))
 	) && "Error transfer requires a throwable value");
+#endif
 
 	zend_observer_fiber_switch_notify(from, to);
 
