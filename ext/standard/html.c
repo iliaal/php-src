@@ -1366,7 +1366,12 @@ static zend_string *escape_html_entities_from(const unsigned char *old, size_t o
 		} else if (copy_ascii_runs && is_non_special_ascii(this_char)) {
 			/* The run can be as long as the rest of the input */
 			if (maxlen - len < oldlen - cursor + 40) {
-				replaced = zend_string_safe_realloc(replaced, maxlen, 1, oldlen - cursor + 128, 0);
+				zend_string *new_replaced = zend_string_safe_frealloc(replaced, maxlen, 1, oldlen - cursor + 128, false, true);
+				if (UNEXPECTED(!new_replaced)) {
+					zend_string_release(replaced);
+					return ZSTR_EMPTY_ALLOC();
+				}
+				replaced = new_replaced;
 				maxlen += oldlen - cursor + 128;
 			}
 			const unsigned char *in = &old[cursor], *const end = &old[oldlen];
