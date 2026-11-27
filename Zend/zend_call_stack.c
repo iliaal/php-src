@@ -136,7 +136,9 @@ static bool zend_call_stack_get_linux_pthread(zend_call_stack *stack)
 
 	/* pthread_getattr_np() will return bogus values for the main thread with
 	 * musl or with some old glibc versions */
+#if ZEND_DEBUG
 	ZEND_ASSERT(!zend_call_stack_is_main_thread());
+#endif
 
 	error = pthread_getattr_np(pthread_self(), &attr);
 	if (UNEXPECTED(error)) {
@@ -190,7 +192,9 @@ static bool zend_call_stack_get_linux_proc_maps(zend_call_stack *stack)
 	int error;
 
 	/* This method is relevant only for the main thread */
+#if ZEND_DEBUG
 	ZEND_ASSERT(zend_call_stack_is_main_thread());
+#endif
 
 	/* Scan the process memory mappings to find the one containing the stack.
 	 *
@@ -293,7 +297,9 @@ static bool zend_call_stack_get_freebsd_pthread(zend_call_stack *stack)
 	size_t max_size;
 
 	/* pthread will return bogus values for the main thread */
+#if ZEND_DEBUG
 	ZEND_ASSERT(!zend_call_stack_is_main_thread());
+#endif
 
 	pthread_attr_init(&attr);
 
@@ -333,7 +339,9 @@ static bool zend_call_stack_get_freebsd_sysctl(zend_call_stack *stack)
 	size_t numguards = 0;
 
 	/* This method is relevant only for the main thread */
+#if ZEND_DEBUG
 	ZEND_ASSERT(zend_call_stack_is_main_thread());
+#endif
 
 	if (sysctl(mib, sizeof(mib)/sizeof(*mib), &stack_base, &len, NULL, 0) != 0) {
 		return false;

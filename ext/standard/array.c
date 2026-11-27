@@ -2002,7 +2002,9 @@ static zend_long php_extract_ref_prefix_if_exists(const zend_array *arr, zend_ar
 			zend_string *final_name = php_prefix_varname(prefix, var_name);
 			if (php_valid_var_name(final_name)) {
 				/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 				ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 				if (Z_ISREF_P(entry)) {
 					Z_ADDREF_P(entry);
@@ -2054,7 +2056,9 @@ static zend_long php_extract_prefix_if_exists(const zend_array *arr, zend_array 
 			zend_string *final_name = php_prefix_varname(prefix, var_name);
 			if (php_valid_var_name(final_name)) {
 				/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 				ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 				ZVAL_DEREF(entry);
 				if ((orig_var = zend_hash_find(symbol_table, final_name)) != NULL) {
@@ -2115,7 +2119,9 @@ prefix:;
 			zend_string *final_name = php_prefix_varname(prefix, var_name);
 			if (php_valid_var_name(final_name)) {
 				/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 				ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 				if (Z_ISREF_P(entry)) {
 					Z_ADDREF_P(entry);
@@ -2185,7 +2191,9 @@ prefix:;
 			zend_string *final_name = php_prefix_varname(prefix, var_name);
 			if (php_valid_var_name(final_name)) {
 				/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 				ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 				ZVAL_DEREF(entry);
 				if ((orig_var = zend_hash_find(symbol_table, final_name)) != NULL) {
@@ -2243,7 +2251,9 @@ static zend_long php_extract_ref_prefix_all(const zend_array *arr, zend_array *s
 		}
 		if (php_valid_var_name(final_name)) {
 			/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 			ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 			if (Z_ISREF_P(entry)) {
 				Z_ADDREF_P(entry);
@@ -2289,7 +2299,9 @@ static zend_long php_extract_prefix_all(const zend_array *arr, zend_array *symbo
 		}
 		if (php_valid_var_name(final_name)) {
 			/* Prefixed varname cannot be equal to "this" due to underscore between prefix and name */
+#if ZEND_DEBUG
 			ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 			ZVAL_DEREF(entry);
 			if ((orig_var = zend_hash_find(symbol_table, final_name)) != NULL) {
@@ -2345,7 +2357,9 @@ static zend_long php_extract_ref_prefix_invalid(const zend_array *arr, zend_arra
 		}
 
 		/* We previously checked if the var name is "this" to prefix it */
+#if ZEND_DEBUG
 		ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 		if (Z_ISREF_P(entry)) {
 			Z_ADDREF_P(entry);
@@ -2400,7 +2414,9 @@ static zend_long php_extract_prefix_invalid(const zend_array *arr, zend_array *s
 		}
 
 		/* We previously checked if the var name is "this" to prefix it */
+#if ZEND_DEBUG
 		ZEND_ASSERT(!zend_string_equals(final_name, ZSTR_KNOWN(ZEND_STR_THIS)));
+#endif
 
 		ZVAL_DEREF(entry);
 		if ((orig_var = zend_hash_find(symbol_table, final_name)) != NULL) {

@@ -165,7 +165,9 @@ static php_stream* php_dir_get_directory_stream_from_user_arg(php_stream *dir_st
 			return NULL;
 		}
 		zend_resource *res = DIRG(default_dir);
+#if ZEND_DEBUG
 		ZEND_ASSERT(res->type == php_file_le_stream());
+#endif
 		dir_stream = (php_stream*) res->ptr;
 	}
 
