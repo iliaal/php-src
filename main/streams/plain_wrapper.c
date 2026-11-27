@@ -325,7 +325,9 @@ PHPAPI php_stream *_php_stream_fopen_from_fd(int fd, const char *mode, const cha
 			stream->flags |= PHP_STREAM_FLAG_NO_SEEK;
 			stream->position = -1;
 		} else if (zero_position) {
+#if ZEND_DEBUG
 			ZEND_ASSERT(zend_lseek(self->fd, 0, SEEK_CUR) == 0);
+#endif
 			stream->position = 0;
 		} else {
 			stream->position = zend_lseek(self->fd, 0, SEEK_CUR);
