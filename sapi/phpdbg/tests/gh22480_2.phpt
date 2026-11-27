@@ -15,7 +15,7 @@ prompt> [Breakpoint #0 added at %s:5]
 prompt> [Breakpoint #0 at %s:5, hits: 1]
 >00005: $a['x'] = 2;
  00006: 
-prompt> [Added watchpoint #0 for $a[]]
+prompt> [Added recursive watchpoint #0 for $a]
 prompt> [$a[x] is already being watched]
 prompt> [Breaking on watchpoint $a]
 Old value%s

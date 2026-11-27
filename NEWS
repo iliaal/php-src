@@ -196,6 +196,10 @@ PHP                                                                        NEWS
   . Fixed use-after-free when unsetting an entry with an open handle.
     (David Carlier)
 
+- PHPDBG:
+  . Fixed use-after-free with recursive watchpoints on arrays when the watch is
+    deleted or the script ends. (Ilia Alshanetsky)
+
 - POSIX:
   . Fixed bug GH-25530 (posix_get_last_error() returns an error from a
     previous request). (Artem Ukrainskiy)
