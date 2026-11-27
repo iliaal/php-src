@@ -960,20 +960,20 @@ void phpdbg_remove_watch_element(phpdbg_watch_element *element) {
 		phpdbg_clean_watch_element(cur);
 		phpdbg_free_watch_element(cur);
 	}
-	while (child) {
-		phpdbg_watch_element *cur = child;
-		child = child->child;
-		if (cur->flags & PHPDBG_WATCH_RECURSIVE_ROOT) {
-			phpdbg_remove_watch_element_recursively(cur);
-			child = NULL;
-		} else {
-			phpdbg_clean_watch_element(cur);
-		}
-		phpdbg_free_watch_element(cur);
-	}
 	if (element->flags & PHPDBG_WATCH_RECURSIVE_ROOT) {
 		phpdbg_remove_watch_element_recursively(element);
 	} else {
+		while (child) {
+			phpdbg_watch_element *cur = child;
+			child = child->child;
+			if (cur->flags & PHPDBG_WATCH_RECURSIVE_ROOT) {
+				phpdbg_remove_watch_element_recursively(cur);
+				child = NULL;
+			} else {
+				phpdbg_clean_watch_element(cur);
+			}
+			phpdbg_free_watch_element(cur);
+		}
 		phpdbg_clean_watch_element(element);
 	}
 	zend_hash_index_del(&PHPDBG_G(watch_elements), element->id);
@@ -1479,7 +1479,7 @@ static int phpdbg_watchpoint_parse_wrapper(char *name, size_t namelen, char *key
 			PHPDBG_G(watch_tmp)->child = element;
 		}
 
-		if (element->child) {
+		if (element->child && !(element->flags & PHPDBG_WATCH_RECURSIVE_ROOT)) {
 			element = element->child;
 		}
 
