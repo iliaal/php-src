@@ -1120,7 +1120,8 @@ cleanup_args:
 		}
 	}
 
-	if (UNEXPECTED(atomic_exchange(&EG(vm_interrupt), false))) {
+	if (UNEXPECTED(atomic_load_explicit(&EG(vm_interrupt), memory_order_relaxed))
+	 && EXPECTED(atomic_exchange(&EG(vm_interrupt), false))) {
 		if (atomic_load(&EG(timed_out))) {
 			zend_timeout();
 		} else if (ZEND_HAS_OOM()) {
