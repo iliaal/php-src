@@ -7201,6 +7201,7 @@ PHP_FUNCTION(array_map)
 					/* If no callback, the result will be an array, consisting of current
 					 * entries from all arrays. */
 					if (ZEND_HAS_OOM()) {
+						ZEND_HASH_FILL_FINISH();
 						efree(array_pos);
 						RETURN_OOM();
 					}
